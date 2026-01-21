@@ -221,6 +221,43 @@
             color: #b3b3b3;
         }
 
+        /* Volume Slider */
+        .volume-container {
+            width: 100%;
+            max-width: 200px;
+            display: flex;
+            align-items: center;
+            margin-top: 10px;
+        }
+
+        .vol-icon {
+            width: 18px;
+            height: 18px;
+            fill: #b3b3b3;
+            margin-right: 10px;
+        }
+
+        .vol-slider {
+            -webkit-appearance: none;
+            appearance: none;
+            width: 100%;
+            height: 4px;
+            background: #404040;
+            border-radius: 2px;
+            outline: none;
+        }
+
+        .vol-slider::-webkit-slider-thumb {
+            -webkit-appearance: none;
+            width: 16px;
+            height: 16px;
+            border-radius: 50%;
+            background: #fff;
+            cursor: pointer;
+            border: none;
+            box-shadow: 0 2px 4px rgba(0, 0, 0, 0.5);
+        }
+
         /* Bottom Actions */
         .actions {
             flex-shrink: 0;
@@ -432,6 +469,15 @@
                 </svg>
             </button>
         </div>
+
+        <div class="volume-container">
+            <svg class="vol-icon" viewBox="0 0 24 24">
+                <path
+                    d="M3 9v6h4l5 5V4L7 9H3zm13.5 3c0-1.77-1.02-3.29-2.5-4.03v8.05c1.48-.73 2.5-2.25 2.5-4.02zM14 3.23v2.06c2.89.86 5 3.54 5 6.71s-2.11 5.85-5 6.71v2.06c4.01-.91 7-4.49 7-8.77s-2.99-7.86-7-8.77z" />
+            </svg>
+            <input type="range" id="vol-slider" class="vol-slider" min="0" max="100" value="0"
+                oninput="onVolInput(this.value)" onchange="onVolChange(this.value)">
+        </div>
     </div>
 
     <div class="actions">
@@ -477,6 +523,8 @@
             var position = 0;
             var lastUpdate = 0;
             var polling = null;
+            var isDraggingVol = false;
+            var lastVolSend = 0;
 
             function el(id) { return document.getElementById(id); }
 
@@ -552,6 +600,11 @@
                     lastUpdate = Date.now();
                     el("time-total").innerText = fmt(duration);
                     el("time-current").innerText = fmt(position);
+
+                    // Update Volume (only if not dragging)
+                    if (!isDraggingVol && p.device) {
+                        el("vol-slider").value = p.device.volume_percent;
+                    }
                 });
             }
 
@@ -682,6 +735,24 @@
                         closeDevices();
                         poll();
                     }, 1000);
+                });
+            };
+
+            // --- Volume ---
+            window.onVolInput = function (val) {
+                isDraggingVol = true;
+                var now = Date.now();
+                // Throttle: only send every 300ms
+                if (now - lastVolSend > 300) {
+                    xhr("PUT", "/api/player/volume", { volume_percent: parseInt(val) });
+                    lastVolSend = now;
+                }
+            };
+
+            window.onVolChange = function (val) {
+                // Final update on release
+                xhr("PUT", "/api/player/volume", { volume_percent: parseInt(val) }, function () {
+                    setTimeout(function () { isDraggingVol = false; }, 500);
                 });
             };
 
