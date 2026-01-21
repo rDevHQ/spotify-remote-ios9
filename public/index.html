@@ -130,6 +130,14 @@
             /* replacement for gap */
             cursor: pointer;
             opacity: 0.9;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+        }
+
+        .btn svg {
+            fill: currentColor;
+            display: block;
         }
 
         .btn:active {
@@ -137,12 +145,14 @@
             transform: scale(0.95);
         }
 
-        .btn-large {
-            font-size: 50px;
+        .btn-large svg {
+            width: 64px;
+            height: 64px;
         }
 
-        .btn-small {
-            font-size: 30px;
+        .btn-small svg {
+            width: 32px;
+            height: 32px;
             color: #b3b3b3;
         }
 
@@ -313,9 +323,22 @@
         </div>
 
         <div class="controls">
-            <button class="btn btn-small" onclick="prevTrack()">⏮</button>
-            <button id="playBtn" class="btn btn-large" onclick="togglePlay()">▶</button>
-            <button class="btn btn-small" onclick="nextTrack()">⏭</button>
+            <button class="btn btn-small" onclick="prevTrack()">
+                <svg viewBox="0 0 24 24">
+                    <path d="M6 6h2v12H6zm3.5 6l8.5 6V6z" />
+                </svg>
+            </button>
+            <button id="playBtn" class="btn btn-large" onclick="togglePlay()">
+                <!-- Default to Play -->
+                <svg viewBox="0 0 24 24" id="icon-play">
+                    <path d="M8 5v14l11-7z" />
+                </svg>
+            </button>
+            <button class="btn btn-small" onclick="nextTrack()">
+                <svg viewBox="0 0 24 24">
+                    <path d="M6 18l8.5-6L6 6v12zM16 6v12h2V6h-2z" />
+                </svg>
+            </button>
         </div>
     </div>
 
@@ -403,7 +426,9 @@
 
                     // Update State
                     isPlaying = p.is_playing;
-                    el("playBtn").innerHTML = isPlaying ? "⏸" : "▶";
+                    var playSvg = '<svg viewBox="0 0 24 24"><path d="M8 5v14l11-7z"/></svg>';
+                    var pauseSvg = '<svg viewBox="0 0 24 24"><path d="M6 19h4V5H6v14zm8-14v14h4V5h-4z"/></svg>';
+                    el("playBtn").innerHTML = isPlaying ? pauseSvg : playSvg;
 
                     // Update Progress
                     duration = item.duration_ms;
