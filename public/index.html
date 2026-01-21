@@ -207,6 +207,15 @@
             font-weight: 600;
             text-transform: uppercase;
             letter-spacing: 1px;
+            cursor: pointer;
+            /* Clickable */
+            padding: 5px 10px;
+            border-radius: 10px;
+            background: rgba(255, 255, 255, 0.05);
+        }
+
+        .device-info:active {
+            background: rgba(255, 255, 255, 0.1);
         }
 
         /* Playlist Drawer */
@@ -371,7 +380,7 @@
     </div>
 
     <div class="actions">
-        <div id="device" class="device-info"></div>
+        <div id="device" class="device-info" onclick="openDevices()"></div>
         <button class="action-btn" onclick="openPlaylists()">Playlists</button>
     </div>
 
@@ -390,6 +399,17 @@
         </div>
         <div id="playlist-list" class="playlist-list">
             <div style="text-align:center; padding:20px; opacity:0.5;">Loading...</div>
+        </div>
+    </div>
+
+    <!-- Devices Drawer -->
+    <div id="devices-drawer" class="drawer">
+        <div class="drawer-header">
+            <div class="drawer-title">Connect to Device</div>
+            <button class="close-btn" onclick="closeDevices()">✕</button>
+        </div>
+        <div id="device-list" class="playlist-list">
+            <div style="text-align:center; padding:20px; opacity:0.5;">Loading Devices...</div>
         </div>
     </div>
 
@@ -537,6 +557,50 @@
                 xhr("PUT", "/api/player/play", { context_uri: uri }, function () {
                     closePlaylists();
                     setTimeout(poll, 1000);
+                });
+            };
+
+            // --- Devices ---
+            window.openDevices = function () {
+                el("devices-drawer").className = "drawer open";
+                loadDevices();
+            };
+            window.closeDevices = function () {
+                el("devices-drawer").className = "drawer";
+            };
+
+            function loadDevices() {
+                el("device-list").innerHTML = '<div style="text-align:center; padding:20px; opacity:0.5;">Scanning...</div>';
+                xhr("GET", "/api/devices", null, function (status, text) {
+                    if (status !== 200) return;
+                    var data = JSON.parse(text);
+                    var html = "";
+                    if (data.devices) {
+                        for (var i = 0; i < data.devices.length; i++) {
+                            var d = data.devices[i];
+                            var icon = d.type === 'Computer' ? '💻' : (d.type === 'Smartphone' ? '📱' : '🔊');
+                            var activeStyle = d.isActive ? 'color:#1db954; font-weight:700;' : '';
+
+                            html += '<div class="playlist-item" onclick="transferPlayback(\'' + d.id + '\')">' +
+                                '<div style="font-size:24px; margin-right:15px;">' + icon + '</div>' +
+                                '<div>' +
+                                '<div class="playlist-name" style="' + activeStyle + '">' + d.name + '</div>' +
+                                '<div class="playlist-meta">' + d.type + '</div>' +
+                                '</div>' +
+                                '</div>';
+                        }
+                    }
+                    el("device-list").innerHTML = html;
+                });
+            }
+
+            window.transferPlayback = function (id) {
+                el("device-list").innerHTML = '<div style="text-align:center; padding:20px; opacity:0.5;">Connecting...</div>';
+                xhr("PUT", "/api/player/transfer", { device_ids: [id] }, function () {
+                    setTimeout(function () {
+                        closeDevices();
+                        poll();
+                    }, 1000);
                 });
             };
 
