@@ -48,4 +48,4 @@ volumes:
 
 ### Attribution
 
-Source : [Spotify Logo PNG](https://pluspng.com/spotify-logo-png-5753.html)
+Source : [Spotify Logo](https://commons.wikimedia.org/wiki/File:Spotify_logo_without_text.svg) (Wikimedia Commons)
