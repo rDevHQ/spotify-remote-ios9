@@ -582,6 +582,7 @@
             var isDraggingVol = false;
             var lastVolSend = 0;
             var lastVolume = 50; // default for restore
+            var activeDeviceId = null;
 
             function el(id) { return document.getElementById(id); }
 
@@ -626,6 +627,7 @@
                     el("track").innerHTML = item.name;
                     el("artist").innerHTML = (item.artists && item.artists[0]) ? item.artists[0].name : "";
                     el("device").innerHTML = (p.device) ? p.device.name : "";
+                    if (p.device) activeDeviceId = p.device.id;
 
                     // Update Cover
                     if (item.album && item.album.images && item.album.images.length) {
@@ -703,13 +705,13 @@
             // --- Controls ---
             window.togglePlay = function () {
                 var url = isPlaying ? "/api/player/pause" : "/api/player/play";
-                xhr("PUT", url, null, function () { setTimeout(poll, 500); });
+                xhr("PUT", url, { device_id: activeDeviceId }, function () { setTimeout(poll, 500); });
             };
-            window.nextTrack = function () { xhr("POST", "/api/player/next", null, function () { setTimeout(poll, 500); }); };
-            window.prevTrack = function () { xhr("POST", "/api/player/prev", null, function () { setTimeout(poll, 500); }); };
+            window.nextTrack = function () { xhr("POST", "/api/player/next", { device_id: activeDeviceId }, function () { setTimeout(poll, 500); }); };
+            window.prevTrack = function () { xhr("POST", "/api/player/prev", { device_id: activeDeviceId }, function () { setTimeout(poll, 500); }); };
 
             window.toggleShuffle = function () {
-                xhr("PUT", "/api/player/shuffle", { state: !shuffleState }, function () { setTimeout(poll, 500); });
+                xhr("PUT", "/api/player/shuffle", { state: !shuffleState, device_id: activeDeviceId }, function () { setTimeout(poll, 500); });
             };
 
             window.toggleRepeat = function () {
@@ -718,7 +720,7 @@
                 else if (repeatState === 'context') nextState = 'track';
                 else nextState = 'off';
 
-                xhr("PUT", "/api/player/repeat", { state: nextState }, function () { setTimeout(poll, 500); });
+                xhr("PUT", "/api/player/repeat", { state: nextState, device_id: activeDeviceId }, function () { setTimeout(poll, 500); });
             };
 
             // --- Playlists ---
@@ -798,6 +800,7 @@
 
             window.transferPlayback = function (id) {
                 el("device-list").innerHTML = '<div style="text-align:center; padding:20px; opacity:0.5;">Connecting...</div>';
+                activeDeviceId = id; // Optimistic update
                 xhr("PUT", "/api/player/transfer", { device_ids: [id] }, function () {
                     setTimeout(function () {
                         closeDevices();
@@ -812,14 +815,14 @@
                 var now = Date.now();
                 // Throttle: only send every 300ms
                 if (now - lastVolSend > 300) {
-                    xhr("PUT", "/api/player/volume", { volume_percent: parseInt(val) });
+                    xhr("PUT", "/api/player/volume", { volume_percent: parseInt(val), device_id: activeDeviceId });
                     lastVolSend = now;
                 }
             };
 
             window.onVolChange = function (val) {
                 // Final update on release
-                xhr("PUT", "/api/player/volume", { volume_percent: parseInt(val) }, function () {
+                xhr("PUT", "/api/player/volume", { volume_percent: parseInt(val), device_id: activeDeviceId }, function () {
                     setTimeout(function () { isDraggingVol = false; }, 500);
                 });
             };
@@ -835,7 +838,7 @@
                 }
                 // Optimistic Update
                 el("vol-slider").value = target;
-                xhr("PUT", "/api/player/volume", { volume_percent: target });
+                xhr("PUT", "/api/player/volume", { volume_percent: target, device_id: activeDeviceId });
             };
 
         })();

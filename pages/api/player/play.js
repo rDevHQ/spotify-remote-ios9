@@ -11,6 +11,13 @@ export default async function handler(req, res) {
     payload.uris = body.uris;
   }
 
-  const r = await spotifyApi("PUT", "/me/player/play", null, Object.keys(payload).length ? payload : undefined);
+  if (body.device_id) {
+    // Pass as query string
+  }
+
+  const query = {};
+  if (body.device_id) query.device_id = body.device_id;
+
+  const r = await spotifyApi("PUT", "/me/player/play", query, Object.keys(payload).length ? payload : undefined);
   res.status(r.status || 200).json(r);
 }
