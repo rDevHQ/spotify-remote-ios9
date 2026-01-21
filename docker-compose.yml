@@ -1,0 +1,12 @@
+services:
+  spotify-remote:
+    image: ghcr.io/rdevhq/spotify-remote-ios9:main
+    container_name: spotify-remote
+    restart: unless-stopped
+    ports:
+      - "3010:3010"
+    environment:
+      - SPOTIFY_CLIENT_ID=${SPOTIFY_CLIENT_ID}
+      - SPOTIFY_CLIENT_SECRET=${SPOTIFY_CLIENT_SECRET}
+      - SPOTIFY_REDIRECT_URI=${SPOTIFY_REDIRECT_URI}
+      - COOKIE_SECRET=${COOKIE_SECRET}

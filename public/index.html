@@ -1,0 +1,212 @@
+<!doctype html>
+<html>
+
+<head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>Spotify Remote</title>
+    <style>
+        body {
+            font-family: -apple-system, Helvetica, Arial, sans-serif;
+            margin: 0;
+            padding: 16px;
+            background: #0b0d10;
+            color: #e8eef6;
+        }
+
+        .card {
+            background: #141922;
+            border-radius: 14px;
+            padding: 14px;
+            margin-bottom: 12px;
+        }
+
+        .title {
+            font-size: 18px;
+            font-weight: 700;
+        }
+
+        .sub {
+            opacity: 0.85;
+            margin-top: 4px;
+        }
+
+        .row {
+            display: flex;
+            gap: 10px;
+            margin-top: 10px;
+        }
+
+        button {
+            flex: 1;
+            background: #1f2a3a;
+            color: #e8eef6;
+            border: 0;
+            border-radius: 12px;
+            padding: 14px 10px;
+            font-size: 16px;
+            font-weight: 700;
+        }
+
+        button:active {
+            opacity: 0.85;
+        }
+
+        .small {
+            font-size: 13px;
+            opacity: 0.7;
+        }
+
+        .volrow button {
+            padding: 12px 8px;
+            font-size: 14px;
+        }
+
+        a {
+            color: #7bdcff;
+            text-decoration: none;
+            font-weight: 700;
+        }
+
+        .err {
+            color: #ffb3b3;
+        }
+    </style>
+</head>
+
+<body>
+
+    <div class="card">
+        <div class="title">Spotify Remote</div>
+        <div class="sub small">iOS9-friendly. Controls Spotify Connect.</div>
+        <div class="sub small"><a href="/api/login">Logga in med Spotify</a></div>
+    </div>
+
+    <div class="card">
+        <div class="title">Now Playing</div>
+
+        <img id="cover" src="" alt="Cover"
+            style="width:100%; max-width:320px; border-radius:16px; display:none; margin-top:12px;" />
+
+        <div id="np1" class="sub" style="margin-top:10px; font-weight:700;">-</div>
+        <div id="np2" class="sub small" style="margin-top:4px;">-</div>
+        <div id="err" class="sub small err" style="margin-top:6px;"></div>
+
+        <div class="row">
+            <button onclick="prevTrack()">⏮</button>
+            <button onclick="togglePlay()">▶︎/⏸</button>
+            <button onclick="nextTrack()">⏭</button>
+        </div>
+
+        <div class="row volrow">
+            <button onclick="volDown()">Vol -</button>
+            <button onclick="volUp()">Vol +</button>
+        </div>
+    </div>
+
+    <script>
+        (function () {
+            var lastPlaying = false;
+            var lastVol = 50;
+
+            function xhr(method, url, cb) {
+                var r = new XMLHttpRequest();
+                r.open(method, url, true);
+                r.onreadystatechange = function () {
+                    if (r.readyState === 4) cb(r.status, r.responseText);
+                };
+                r.send(null);
+            }
+
+            function setText(id, txt) {
+                document.getElementById(id).innerHTML = txt;
+            }
+
+            function poll() {
+                xhr("GET", "/api/player/status", function (status, text) {
+                    if (status === 401) {
+                        setText("err", "Inte inloggad. Tryck 'Logga in med Spotify'.");
+                        setText("np1", "-");
+                        setText("np2", "-");
+                        return;
+                    }
+
+                    if (status !== 200) {
+                        setText("err", "Statusfel: " + status);
+                        return;
+                    }
+
+                    setText("err", "");
+                    var json = null;
+                    try { json = JSON.parse(text); } catch (e) { }
+                    if (!json || !json.ok || !json.player) {
+                        setText("np1", "Ingen aktiv uppspelning");
+                        setText("np2", "Starta en låt i Spotify-appen först.");
+                        document.getElementById("cover").style.display = "none";
+                        return;
+                    }
+
+                    var p = json.player;
+                    // --- Cover art ---
+                    var coverEl = document.getElementById("cover");
+                    var coverUrl = "";
+
+                    if (p.item && p.item.album && p.item.album.images && p.item.album.images.length) {
+                        // oftast: [0]=640px, [1]=300px, [2]=64px
+                        coverUrl = p.item.album.images[0].url; // största
+                    }
+
+                    if (coverUrl) {
+                        coverEl.src = coverUrl;
+                        coverEl.style.display = "block";
+                    } else {
+                        coverEl.style.display = "none";
+                    }
+
+                    lastPlaying = !!p.is_playing;
+
+                    if (p.device && typeof p.device.volume_percent === "number") {
+                        lastVol = p.device.volume_percent;
+                    }
+
+                    var track = (p.item && p.item.name) ? p.item.name : "Okänd låt";
+                    var artist = "-";
+                    if (p.item && p.item.artists && p.item.artists.length) {
+                        artist = p.item.artists[0].name;
+                    }
+                    var dev = (p.device && p.device.name) ? p.device.name : "Okänd enhet";
+
+                    setText("np1", track);
+                    setText("np2", artist + " • " + dev);
+                });
+            }
+
+            window.togglePlay = function () {
+                var url = lastPlaying ? "/api/player/pause" : "/api/player/play";
+                xhr("PUT", url, function () { poll(); });
+            };
+
+            window.nextTrack = function () {
+                xhr("POST", "/api/player/next", function () { poll(); });
+            };
+
+            window.prevTrack = function () {
+                xhr("POST", "/api/player/prev", function () { poll(); });
+            };
+
+            function setVolume(v) {
+                if (v < 0) v = 0;
+                if (v > 100) v = 100;
+                xhr("PUT", "/api/player/volume?v=" + v, function () { poll(); });
+            }
+
+            window.volDown = function () { setVolume(lastVol - 7); };
+            window.volUp = function () { setVolume(lastVol + 7); };
+
+            poll();
+            setInterval(poll, 2500);
+        })();
+    </script>
+</body>
+
+</html>
