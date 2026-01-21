@@ -5,6 +5,7 @@
     <meta charset="utf-8">
     <meta name="viewport" content="width=device-width, initial-scale=1">
     <title>Spotify Remote</title>
+    <link rel="icon" type="image/png" href="spotify-logo.png">
     <style>
         body {
             font-family: -apple-system, Helvetica, Arial, sans-serif;
@@ -19,8 +20,17 @@
             border-radius: 14px;
             padding: 14px;
             margin-bottom: 12px;
+            text-align: center;
         }
 
+        .logo {
+            width: 80px;
+            height: 80px;
+            margin: 10px auto;
+            display: block;
+        }
+
+        /* ... rest of styles ... */
         .title {
             font-size: 18px;
             font-weight: 700;
@@ -35,6 +45,7 @@
             display: flex;
             gap: 10px;
             margin-top: 10px;
+            text-align: left;
         }
 
         button {
@@ -68,6 +79,19 @@
             font-weight: 700;
         }
 
+        .attribution {
+            text-align: center;
+            font-size: 10px;
+            opacity: 0.3;
+            margin-top: 20px;
+        }
+
+        .attribution a {
+            color: inherit;
+            font-weight: normal;
+            text-decoration: underline;
+        }
+
         .err {
             color: #ffb3b3;
         }
@@ -77,9 +101,9 @@
 <body>
 
     <div class="card">
-        <div class="title">Spotify Remote</div>
-        <div class="sub small">iOS9-friendly. Controls Spotify Connect.</div>
-        <div class="sub small"><a href="/api/login">Logga in med Spotify</a></div>
+        <a href="/api/login">
+            <img src="spotify-logo.png" alt="Spotify Remote" class="logo" border="0">
+        </a>
     </div>
 
     <div class="card">
@@ -207,6 +231,10 @@
             setInterval(poll, 2500);
         })();
     </script>
+
+    <div class="attribution">
+        Source : <a title="Spotify Logo PNG" href="https://pluspng.com/spotify-logo-png-5753.html">Spotify Logo PNG</a>
+    </div>
 </body>
 
 </html>

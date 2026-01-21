@@ -45,3 +45,7 @@ volumes:
 4.  Authorize the app.
 5.  **Done!** The server has saved your access token to `/data/spotify_token.json`.
 6.  Now open `http://<your-server-ip>:3010` on your **iOS 9 iPad**. It will work immediately!
+
+### Attribution
+
+Source : [Spotify Logo PNG](https://pluspng.com/spotify-logo-png-5753.html)
