@@ -143,6 +143,47 @@
             align-items: center;
             justify-content: center;
             width: 100%;
+            position: relative;
+        }
+
+        .controls-extra {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            width: 100%;
+            max-width: 300px;
+            /* Match album art roughly */
+            margin-bottom: 20px;
+        }
+
+        .btn-extra {
+            background: none;
+            border: none;
+            color: #b3b3b3;
+            padding: 10px;
+            cursor: pointer;
+        }
+
+        .btn-extra.active {
+            color: #1db954;
+            position: relative;
+        }
+
+        .btn-extra.active-track::after {
+            content: '1';
+            position: absolute;
+            top: 8px;
+            right: 8px;
+            font-size: 10px;
+            font-weight: 700;
+            background: #121212;
+            padding: 0 2px;
+        }
+
+        .btn-extra svg {
+            width: 20px;
+            height: 20px;
+            fill: currentColor;
         }
 
         .btn {
@@ -359,6 +400,20 @@
             </div>
         </div>
 
+        <div class="controls-extra">
+            <button id="btn-shuffle" class="btn-extra" onclick="toggleShuffle()">
+                <svg viewBox="0 0 24 24">
+                    <path
+                        d="M10.59 9.17L5.41 4 4 5.41l5.17 5.17 1.42-1.41zM14.5 4l2.04 2.04L4 18.59 5.41 20 17.96 7.46 20 9.5V4h-5.5zm.33 9.41l-1.41 1.41 3.13 3.13L14.5 20H20v-5.5l-2.04 2.04-3.13-3.13z" />
+                </svg>
+            </button>
+            <button id="btn-repeat" class="btn-extra" onclick="toggleRepeat()">
+                <svg viewBox="0 0 24 24">
+                    <path d="M7 7h10v3l4-4-4-4v3H5v6h2V7zm10 10H7v-3l-4 4 4 4v-3h12v-6h-2v6z" />
+                </svg>
+            </button>
+        </div>
+
         <div class="controls">
             <button class="btn btn-small" onclick="prevTrack()">
                 <svg viewBox="0 0 24 24">
@@ -416,6 +471,8 @@
     <script>
         (function () {
             var isPlaying = false;
+            var shuffleState = false;
+            var repeatState = 'off';
             var duration = 0;
             var position = 0;
             var lastUpdate = 0;
@@ -474,6 +531,17 @@
 
                     // Update State
                     isPlaying = p.is_playing;
+                    shuffleState = p.shuffle_state;
+                    repeatState = p.repeat_state;
+
+                    // UI Updates
+                    el("btn-shuffle").className = shuffleState ? "btn-extra active" : "btn-extra";
+
+                    var repClass = "btn-extra";
+                    if (repeatState === 'context') repClass += " active";
+                    if (repeatState === 'track') repClass += " active active-track";
+                    el("btn-repeat").className = repClass;
+
                     var playSvg = '<svg viewBox="0 0 24 24"><path d="M8 5v14l11-7z"/></svg>';
                     var pauseSvg = '<svg viewBox="0 0 24 24"><path d="M6 19h4V5H6v14zm8-14v14h4V5h-4z"/></svg>';
                     el("playBtn").innerHTML = isPlaying ? pauseSvg : playSvg;
@@ -518,6 +586,19 @@
             };
             window.nextTrack = function () { xhr("POST", "/api/player/next", null, function () { setTimeout(poll, 500); }); };
             window.prevTrack = function () { xhr("POST", "/api/player/prev", null, function () { setTimeout(poll, 500); }); };
+
+            window.toggleShuffle = function () {
+                xhr("PUT", "/api/player/shuffle", { state: !shuffleState }, function () { setTimeout(poll, 500); });
+            };
+
+            window.toggleRepeat = function () {
+                var nextState = 'off';
+                if (repeatState === 'off') nextState = 'context';
+                else if (repeatState === 'context') nextState = 'track';
+                else nextState = 'off';
+
+                xhr("PUT", "/api/player/repeat", { state: nextState }, function () { setTimeout(poll, 500); });
+            };
 
             // --- Playlists ---
             window.openPlaylists = function () {
