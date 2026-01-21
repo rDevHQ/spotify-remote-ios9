@@ -54,11 +54,35 @@
         /* Album Art */
         .cover-container {
             width: 100%;
-            max-width: 300px;
-            aspect-ratio: 1/1;
+            max-width: 400px;
+            padding-bottom: 100%;
+            /* Square Aspect Ratio */
+            height: 0;
             position: relative;
             margin-bottom: 25px;
-            box-shadow: 0 8px 24px rgba(0, 0, 0, 0.5);
+            box-shadow: 0 12px 40px rgba(0, 0, 0, 0.6);
+        }
+
+        .cover {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            border-radius: 8px;
+            background: #282828;
+            object-fit: cover;
+        }
+
+        /* Time Display */
+        .time-info {
+            width: 100%;
+            display: flex;
+            justify-content: space-between;
+            font-size: 12px;
+            color: #b3b3b3;
+            margin-top: 8px;
+            font-variant-numeric: tabular-nums;
         }
 
         .cover {
@@ -320,6 +344,10 @@
 
         <div class="progress-wrapper">
             <div id="progress" class="progress-bar"></div>
+            <div class="time-info">
+                <span id="time-current">0:00</span>
+                <span id="time-total">0:00</span>
+            </div>
         </div>
 
         <div class="controls">
@@ -434,7 +462,17 @@
                     duration = item.duration_ms;
                     position = p.progress_ms;
                     lastUpdate = Date.now();
+                    el("time-total").innerText = fmt(duration);
+                    el("time-current").innerText = fmt(position);
                 });
+            }
+
+            function fmt(ms) {
+                if (!ms) return "0:00";
+                var s = Math.floor(ms / 1000);
+                var m = Math.floor(s / 60);
+                s = s % 60;
+                return m + ":" + (s < 10 ? "0" + s : s);
             }
 
             // Smooth Progress Bar
@@ -445,6 +483,7 @@
                 if (estPos > duration) estPos = duration;
                 var pct = (estPos / duration) * 100;
                 el("progress").style.width = pct + "%";
+                el("time-current").innerText = fmt(estPos);
             }, 100); // 10fps for smoothness
 
             // Polling Loop
