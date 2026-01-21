@@ -32,8 +32,9 @@
         }
 
         .logo {
-            width: 40px;
-            height: 40px;
+            width: 180px;
+            /* Bigger logo */
+            height: auto;
             display: block;
             margin: 0 auto;
         }
@@ -191,10 +192,30 @@
             border: none;
             color: #fff;
             padding: 0;
-            margin: 0 15px;
-            /* replacement for gap */
+            justify-content: space-between;
+            /* Spread them out */
+            max-width: 450px;
+        }
+
+        .btn {
+            background: none;
+            border: none;
+            color: #fff;
+            padding: 0;
+            margin: 0 10px;
             cursor: pointer;
             opacity: 0.9;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+        }
+
+        .btn-extra {
+            background: none;
+            border: none;
+            color: #b3b3b3;
+            padding: 0;
+            cursor: pointer;
             display: flex;
             align-items: center;
             justify-content: center;
@@ -211,14 +232,25 @@
         }
 
         .btn-large svg {
-            width: 64px;
-            height: 64px;
+            width: 90px;
+            height: 90px;
         }
 
         .btn-small svg {
-            width: 32px;
-            height: 32px;
-            color: #b3b3b3;
+            width: 48px;
+            height: 48px;
+            color: #fff;
+            /* Make prev/next bright white too */
+        }
+
+        .btn-extra svg {
+            width: 24px;
+            height: 24px;
+            fill: #b3b3b3;
+        }
+
+        .btn-extra.active svg {
+            fill: #1db954;
         }
 
         /* Volume Slider */
@@ -437,13 +469,37 @@
             </div>
         </div>
 
-        <div class="controls-extra">
+        <div class="controls">
+            <!-- Shuffle -->
             <button id="btn-shuffle" class="btn-extra" onclick="toggleShuffle()">
                 <svg viewBox="0 0 24 24">
                     <path
                         d="M10.59 9.17L5.41 4 4 5.41l5.17 5.17 1.42-1.41zM14.5 4l2.04 2.04L4 18.59 5.41 20 17.96 7.46 20 9.5V4h-5.5zm.33 9.41l-1.41 1.41 3.13 3.13L14.5 20H20v-5.5l-2.04 2.04-3.13-3.13z" />
                 </svg>
             </button>
+
+            <!-- Prev -->
+            <button class="btn btn-small" onclick="prevTrack()">
+                <svg viewBox="0 0 24 24">
+                    <path d="M6 6h2v12H6zm3.5 6l8.5 6V6z" />
+                </svg>
+            </button>
+
+            <!-- Play -->
+            <button id="playBtn" class="btn btn-large" onclick="togglePlay()">
+                <svg viewBox="0 0 24 24" id="icon-play">
+                    <path d="M8 5v14l11-7z" />
+                </svg>
+            </button>
+
+            <!-- Next -->
+            <button class="btn btn-small" onclick="nextTrack()">
+                <svg viewBox="0 0 24 24">
+                    <path d="M6 18l8.5-6L6 6v12zM16 6v12h2V6h-2z" />
+                </svg>
+            </button>
+
+            <!-- Repeat -->
             <button id="btn-repeat" class="btn-extra" onclick="toggleRepeat()">
                 <svg viewBox="0 0 24 24">
                     <path d="M7 7h10v3l4-4-4-4v3H5v6h2V7zm10 10H7v-3l-4 4 4 4v-3h12v-6h-2v6z" />
@@ -451,30 +507,14 @@
             </button>
         </div>
 
-        <div class="controls">
-            <button class="btn btn-small" onclick="prevTrack()">
-                <svg viewBox="0 0 24 24">
-                    <path d="M6 6h2v12H6zm3.5 6l8.5 6V6z" />
-                </svg>
-            </button>
-            <button id="playBtn" class="btn btn-large" onclick="togglePlay()">
-                <!-- Default to Play -->
-                <svg viewBox="0 0 24 24" id="icon-play">
-                    <path d="M8 5v14l11-7z" />
-                </svg>
-            </button>
-            <button class="btn btn-small" onclick="nextTrack()">
-                <svg viewBox="0 0 24 24">
-                    <path d="M6 18l8.5-6L6 6v12zM16 6v12h2V6h-2z" />
-                </svg>
-            </button>
-        </div>
-
         <div class="volume-container">
-            <svg class="vol-icon" viewBox="0 0 24 24">
-                <path
-                    d="M3 9v6h4l5 5V4L7 9H3zm13.5 3c0-1.77-1.02-3.29-2.5-4.03v8.05c1.48-.73 2.5-2.25 2.5-4.02zM14 3.23v2.06c2.89.86 5 3.54 5 6.71s-2.11 5.85-5 6.71v2.06c4.01-.91 7-4.49 7-8.77s-2.99-7.86-7-8.77z" />
-            </svg>
+            <!-- Mute Button -->
+            <div id="btn-mute" class="vol-icon" onclick="toggleMute()" style="cursor: pointer;">
+                <svg viewBox="0 0 24 24">
+                    <path
+                        d="M3 9v6h4l5 5V4L7 9H3zm13.5 3c0-1.77-1.02-3.29-2.5-4.03v8.05c1.48-.73 2.5-2.25 2.5-4.02zM14 3.23v2.06c2.89.86 5 3.54 5 6.71s-2.11 5.85-5 6.71v2.06c4.01-.91 7-4.49 7-8.77s-2.99-7.86-7-8.77z" />
+                </svg>
+            </div>
             <input type="range" id="vol-slider" class="vol-slider" min="0" max="100" value="0"
                 oninput="onVolInput(this.value)" onchange="onVolChange(this.value)">
         </div>
@@ -525,6 +565,7 @@
             var polling = null;
             var isDraggingVol = false;
             var lastVolSend = 0;
+            var lastVolume = 50; // default for restore
 
             function el(id) { return document.getElementById(id); }
 
@@ -602,8 +643,19 @@
                     el("time-current").innerText = fmt(position);
 
                     // Update Volume (only if not dragging)
-                    if (!isDraggingVol && p.device) {
-                        el("vol-slider").value = p.device.volume_percent;
+                    if (p.device) {
+                        if (!isDraggingVol) {
+                            el("vol-slider").value = p.device.volume_percent;
+                        }
+                        if (p.device.volume_percent > 0) {
+                            lastVolume = p.device.volume_percent;
+                        }
+
+                        // Icon Update
+                        var mutePath = "M16.5 12c0-1.77-1.02-3.29-2.5-4.03v2.21l2.45 2.45c.03-.2.05-.41.05-.63zm2.5 0c0 .94-.2 1.82-.54 2.64l1.51 1.51C20.63 14.91 21 13.5 21 12c0-4.28-2.99-7.86-7-8.77v2.06c2.89.86 5 3.54 5 6.71zM4.27 3L3 4.27 7.73 9H3v6h4l5 5v-6.73l4.25 4.25c-.67.52-1.42.93-2.25 1.18v2.06c1.38-.31 2.63-.95 3.69-1.81L19.73 21 21 19.73 4.27 3zM12 4L9.91 6.09 12 8.18V4z";
+                        var volPath = "M3 9v6h4l5 5V4L7 9H3zm13.5 3c0-1.77-1.02-3.29-2.5-4.03v8.05c1.48-.73 2.5-2.25 2.5-4.02zM14 3.23v2.06c2.89.86 5 3.54 5 6.71s-2.11 5.85-5 6.71v2.06c4.01-.91 7-4.49 7-8.77s-2.99-7.86-7-8.77z";
+
+                        el("btn-mute").innerHTML = '<svg viewBox="0 0 24 24"><path d="' + (p.device.volume_percent === 0 ? mutePath : volPath) + '"/></svg>';
                     }
                 });
             }
@@ -754,6 +806,20 @@
                 xhr("PUT", "/api/player/volume", { volume_percent: parseInt(val) }, function () {
                     setTimeout(function () { isDraggingVol = false; }, 500);
                 });
+            };
+
+            window.toggleMute = function () {
+                var current = parseInt(el("vol-slider").value);
+                var target = 0;
+                if (current === 0) {
+                    target = lastVolume || 50;
+                } else {
+                    lastVolume = current;
+                    target = 0;
+                }
+                // Optimistic Update
+                el("vol-slider").value = target;
+                xhr("PUT", "/api/player/volume", { volume_percent: target });
             };
 
         })();
