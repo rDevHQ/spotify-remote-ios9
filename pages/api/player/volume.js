@@ -1,4 +1,4 @@
-import { spotifyApi } from "../../lib/spotify";
+import { spotifyApi } from "../../../lib/spotify";
 
 export default async function handler(req, res) {
   if (req.method !== "PUT") return res.status(405).send("Method not allowed");
