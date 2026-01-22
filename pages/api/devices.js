@@ -11,6 +11,7 @@ export default async function handler(req, res) {
         name: d.name,
         type: d.type,
         isActive: d.is_active,
+        isRestricted: d.is_restricted,
     }));
 
     res.status(200).json({ ok: true, devices });

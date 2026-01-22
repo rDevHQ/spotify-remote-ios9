@@ -583,6 +583,7 @@
             var lastVolSend = 0;
             var lastVolume = 50; // default for restore
             var activeDeviceId = null;
+            var activeDeviceIsActive = false;
             window.cachedDevices = []; // Global cache for recovery
 
             function el(id) { return document.getElementById(id); }
@@ -626,14 +627,18 @@
 
                     var p = json.player;
                     var item = p.item;
+                    var isRestricted = p.device && p.device.is_restricted;
 
                     // Update Text
                     el("track").innerHTML = item.name;
                     el("artist").innerHTML = (item.artists && item.artists[0]) ? item.artists[0].name : "";
-                    el("device").innerHTML = (p.device) ? (p.device.name + " <span style='font-size:8px; opacity:0.5'>(" + (p.device.id || activeDeviceId || '?') + ")</span>") : "";
-                    el("device").innerHTML = (p.device) ? (p.device.name + " <span style='font-size:8px; opacity:0.5'>(" + (p.device.id || activeDeviceId || '?') + ")</span>") : "";
+                    var deviceName = (p.device) ? p.device.name : "";
+                    if (isRestricted) deviceName += " <span style='color:#f00; font-size:10px;'>(RESTRICTED)</span>";
+                    el("device").innerHTML = deviceName + " <span style='font-size:8px; opacity:0.5'>(" + (p.device ? (p.device.id || activeDeviceId || '?') : '?') + ")</span>";
+                    
                     if (p.device && p.device.id) {
                         activeDeviceId = p.device.id;
+                        activeDeviceIsActive = p.device.is_active;
                     } else if (p.device && !p.device.id && !activeDeviceId) {
                         // ID missing and we don't have one cached. Try to recover it.
                         recoverDeviceId(p.device.name);
@@ -715,13 +720,25 @@
             // --- Controls ---
             window.togglePlay = function () {
                 var url = isPlaying ? "/api/player/pause" : "/api/player/play";
-                xhr("PUT", url, { device_id: activeDeviceId }, function () { setTimeout(poll, 500); });
+                var body = {};
+                if (!activeDeviceIsActive) body.device_id = activeDeviceId;
+                xhr("PUT", url, body, function () { setTimeout(poll, 500); });
             };
-            window.nextTrack = function () { xhr("POST", "/api/player/next", { device_id: activeDeviceId }, function () { setTimeout(poll, 500); }); };
-            window.prevTrack = function () { xhr("POST", "/api/player/prev", { device_id: activeDeviceId }, function () { setTimeout(poll, 500); }); };
+            window.nextTrack = function () {
+                var body = {};
+                if (!activeDeviceIsActive) body.device_id = activeDeviceId;
+                xhr("POST", "/api/player/next", body, function () { setTimeout(poll, 500); });
+            };
+            window.prevTrack = function () {
+                var body = {};
+                if (!activeDeviceIsActive) body.device_id = activeDeviceId;
+                xhr("POST", "/api/player/prev", body, function () { setTimeout(poll, 500); });
+            };
 
             window.toggleShuffle = function () {
-                xhr("PUT", "/api/player/shuffle", { state: !shuffleState, device_id: activeDeviceId }, function () { setTimeout(poll, 500); });
+                var body = { state: !shuffleState };
+                if (!activeDeviceIsActive) body.device_id = activeDeviceId;
+                xhr("PUT", "/api/player/shuffle", body, function () { setTimeout(poll, 500); });
             };
 
             window.toggleRepeat = function () {
@@ -730,7 +747,9 @@
                 else if (repeatState === 'context') nextState = 'track';
                 else nextState = 'off';
 
-                xhr("PUT", "/api/player/repeat", { state: nextState, device_id: activeDeviceId }, function () { setTimeout(poll, 500); });
+                var body = { state: nextState };
+                if (!activeDeviceIsActive) body.device_id = activeDeviceId;
+                xhr("PUT", "/api/player/repeat", body, function () { setTimeout(poll, 500); });
             };
 
             // --- Playlists ---
@@ -768,7 +787,9 @@
             }
 
             window.playPlaylist = function (uri) {
-                xhr("PUT", "/api/player/play", { context_uri: uri }, function () {
+                var body = { context_uri: uri };
+                if (!activeDeviceIsActive) body.device_id = activeDeviceId;
+                xhr("PUT", "/api/player/play", body, function () {
                     closePlaylists();
                     setTimeout(poll, 1000);
                 });
@@ -794,11 +815,12 @@
                             var d = data.devices[i];
                             var icon = d.type === 'Computer' ? '💻' : (d.type === 'Smartphone' ? '📱' : '🔊');
                             var activeStyle = d.isActive ? 'color:#1db954; font-weight:700;' : '';
+                            var restrictedTag = d.isRestricted ? ' <span style="font-size:10px; color:#f00;">(Restricted)</span>' : '';
 
                             html += '<div class="playlist-item" onclick="transferPlayback(\'' + d.id + '\')">' +
                                 '<div style="font-size:24px; margin-right:15px;">' + icon + '</div>' +
                                 '<div>' +
-                                '<div class="playlist-name" style="' + activeStyle + '">' + d.name + '</div>' +
+                                '<div class="playlist-name" style="' + activeStyle + '">' + d.name + restrictedTag + '</div>' +
                                 '<div class="playlist-meta">' + d.type + ' (' + d.id + ')</div>' +
                                 '</div>' +
                                 '</div>';
@@ -851,14 +873,18 @@
                 var now = Date.now();
                 // Throttle: only send every 300ms
                 if (now - lastVolSend > 300) {
-                    xhr("PUT", "/api/player/volume", { volume_percent: parseInt(val), device_id: activeDeviceId });
+                    var body = { volume_percent: parseInt(val) };
+                    if (!activeDeviceIsActive) body.device_id = activeDeviceId;
+                    xhr("PUT", "/api/player/volume", body);
                     lastVolSend = now;
                 }
             };
 
             window.onVolChange = function (val) {
                 // Final update on release
-                xhr("PUT", "/api/player/volume", { volume_percent: parseInt(val), device_id: activeDeviceId }, function () {
+                var body = { volume_percent: parseInt(val) };
+                if (!activeDeviceIsActive) body.device_id = activeDeviceId;
+                xhr("PUT", "/api/player/volume", body, function () {
                     setTimeout(function () { isDraggingVol = false; }, 500);
                 });
             };
@@ -874,7 +900,9 @@
                 }
                 // Optimistic Update
                 el("vol-slider").value = target;
-                xhr("PUT", "/api/player/volume", { volume_percent: target, device_id: activeDeviceId });
+                var body = { volume_percent: target };
+                if (!activeDeviceIsActive) body.device_id = activeDeviceId;
+                xhr("PUT", "/api/player/volume", body);
             };
 
         })();
