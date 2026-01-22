@@ -524,11 +524,10 @@
         </div>
 
         <div class="controls">
-            <!-- Shuffle -->
-            <button id="btn-shuffle" class="btn-extra" onclick="toggleShuffle()">
+            <!-- Volume Down -->
+            <button id="btn-vol-down" class="btn-extra" onclick="volumeDown()">
                 <svg viewBox="0 0 24 24">
-                    <path
-                        d="M10.59 9.17L5.41 4 4 5.41l5.17 5.17 1.42-1.41zM14.5 4l2.04 2.04L4 18.59 5.41 20 17.96 7.46 20 9.5V4h-5.5zm.33 9.41l-1.41 1.41 3.13 3.13L14.5 20H20v-5.5l-2.04 2.04-3.13-3.13z" />
+                    <path d="M4 11h16v2H4z" />
                 </svg>
             </button>
 
@@ -553,10 +552,10 @@
                 </svg>
             </button>
 
-            <!-- Repeat -->
-            <button id="btn-repeat" class="btn-extra" onclick="toggleRepeat()">
+            <!-- Volume Up -->
+            <button id="btn-vol-up" class="btn-extra" onclick="volumeUp()">
                 <svg viewBox="0 0 24 24">
-                    <path d="M7 7h10v3l4-4-4-4v3H5v6h2V7zm10 10H7v-3l-4 4 4 4v-3h12v-6h-2v6z" />
+                    <path d="M11 4h2v16h-2zM4 11h16v2H4z" />
                 </svg>
             </button>
         </div>
@@ -584,8 +583,12 @@
     </div>
 
     <div class="actions">
-        <div id="device" class="device-info" onclick="openDevices()"></div>
-        <button class="action-btn" onclick="openPlaylists()">Playlists</button>
+        <select id="speaker-select" class="device-info">
+            <option value="kitchen">Kitchen</option>
+            <option value="livingroom">Living Room</option>
+            <option value="bedroom">Bedroom</option>
+        </select>
+        <div id="device" class="action-btn">Now playing: —</div>
     </div>
 
     <!-- Login Overlay -->
@@ -619,444 +622,105 @@
 
     <script>
         (function () {
-            var isPlaying = false;
-            var shuffleState = false;
-            var repeatState = 'off';
-            var duration = 0;
-            var position = 0;
-            var lastUpdate = 0;
-            var polling = null;
-            var isDraggingVol = false;
-            var lastVolSend = 0;
-            var lastVolume = 50; // default for restore
-            var activeDeviceId = null;
-            var activeDeviceIsActive = false;
-            window.cachedDevices = []; // Global cache for recovery
-            var preferredReceiverName = window.PREFERRED_RECEIVER_NAME || "ZimaOS Spotifyd";
-            var autoTransferInProgress = false;
-            var autoTransferPending = false;
-            var autoTransferTriggeredFor = null;
+            var WEBHOOK_URL = "http://homeassistant.local:8123/api/webhook/sonos_remote_control";
+            var speakerSelect = document.getElementById("speaker-select");
+            var trackEl = document.getElementById("track");
+            var artistEl = document.getElementById("artist");
+            var deviceEl = document.getElementById("device");
+            var volSlider = document.getElementById("vol-slider");
+            var timeCurrent = document.getElementById("time-current");
+            var timeTotal = document.getElementById("time-total");
+            var lastVolume = 50;
+            var isMuted = false;
 
-            function el(id) { return document.getElementById(id); }
+            function setStatus(text) {
+                artistEl.innerHTML = text;
+            }
 
-            function xhr(method, url, body, cb) {
-                var r = new XMLHttpRequest();
-                r.open(method, url, true);
-                if (body) r.setRequestHeader("Content-Type", "application/json");
-                r.onreadystatechange = function () {
-                    if (r.readyState === 4) {
-                        if (r.status >= 400 && url.indexOf("/api/player/") !== -1) {
-                            alert("Error " + r.status + ": " + r.responseText);
-                        }
-                        if (cb) cb(r.status, r.responseText);
+            function setDeviceLabel() {
+                var label = speakerSelect.options[speakerSelect.selectedIndex].text;
+                deviceEl.innerHTML = "Now playing: " + label;
+            }
+
+            function saveSpeaker(value) {
+                try {
+                    localStorage.setItem("sonosSpeaker", value);
+                } catch (e) {}
+            }
+
+            function loadSpeaker() {
+                try {
+                    return localStorage.getItem("sonosSpeaker") || "kitchen";
+                } catch (e) {
+                    return "kitchen";
+                }
+            }
+
+            function sendAction(action, volume) {
+                var payload = {
+                    player: speakerSelect.value,
+                    action: action
+                };
+                if (action === "volume_set") payload.volume = volume;
+
+                var xhr = new XMLHttpRequest();
+                xhr.open("POST", WEBHOOK_URL, true);
+                xhr.setRequestHeader("Content-Type", "application/json");
+                xhr.onreadystatechange = function () {
+                    if (xhr.readyState === 4) {
+                        setStatus("Sent: " + action);
                     }
                 };
-                r.send(body ? JSON.stringify(body) : null);
+                xhr.send(JSON.stringify(payload));
             }
 
-            // --- Player Logic ---
-            function poll() {
-                xhr("GET", "/api/player/status", null, function (status, text) {
-                    if (status === 401) {
-                        el("login-modal").style.display = "flex";
-                        return;
-                    }
-                    el("login-modal").style.display = "none";
-
-                    var json = null;
-                    try { json = JSON.parse(text); } catch (e) { }
-
-                    if (!json || !json.player || !json.player.item) {
-                        el("track").innerHTML = "Not Playing";
-                        el("artist").innerHTML = "Open Spotify on a device";
-                        el("cover").style.display = "none";
-                        el("no-cover").style.display = "flex";
-                        el("playBtn").innerHTML = "▶";
-                        el("progress").style.width = "0%";
-                        return;
-                    }
-
-                    var p = json.player;
-                    var item = p.item;
-                    var isRestricted = p.device && p.device.is_restricted;
-
-                    // Update Text
-                    el("track").innerHTML = item.name;
-                    el("artist").innerHTML = (item.artists && item.artists[0]) ? item.artists[0].name : "";
-                    var deviceName = (p.device) ? p.device.name : "";
-                    if (isRestricted) deviceName += " <span style='color:#f00; font-size:10px;'>(RESTRICTED)</span>";
-                    el("device").innerHTML = deviceName + " <span style='font-size:8px; opacity:0.5'>(" + (p.device ? (p.device.id || activeDeviceId || '?') : '?') + ")</span>";
-                    setRestrictedBanner(isRestricted, p.device ? p.device.name : preferredReceiverName);
-                    
-                    if (p.device && p.device.id) {
-                        activeDeviceId = p.device.id;
-                        activeDeviceIsActive = p.device.is_active;
-                    } else if (p.device && !p.device.id && !activeDeviceId) {
-                        // ID missing and we don't have one cached. Try to recover it.
-                        recoverDeviceId(p.device.name);
-                    }
-
-                    if (isRestricted && p.device && p.device.id) {
-                        if (autoTransferTriggeredFor !== p.device.id && !autoTransferInProgress) {
-                            autoTransferTriggeredFor = p.device.id;
-                            autoTakeControl();
-                        }
-                    } else {
-                        autoTransferTriggeredFor = null;
-                    }
-
-                    // Update Cover
-                    if (item.album && item.album.images && item.album.images.length) {
-                        el("cover").src = item.album.images[0].url;
-                        el("cover").style.display = "block";
-                        el("no-cover").style.display = "none";
-                    }
-
-                    // Update State
-                    isPlaying = p.is_playing;
-                    shuffleState = p.shuffle_state;
-                    repeatState = p.repeat_state;
-
-                    // UI Updates
-                    el("btn-shuffle").className = shuffleState ? "btn-extra active" : "btn-extra";
-
-                    var repClass = "btn-extra";
-                    if (repeatState === 'context') repClass += " active";
-                    if (repeatState === 'track') repClass += " active active-track";
-                    el("btn-repeat").className = repClass;
-
-                    var playSvg = '<svg viewBox="0 0 24 24"><path d="M8 5v14l11-7z"/></svg>';
-                    var pauseSvg = '<svg viewBox="0 0 24 24"><path d="M6 19h4V5H6v14zm8-14v14h4V5h-4z"/></svg>';
-                    el("playBtn").innerHTML = isPlaying ? pauseSvg : playSvg;
-
-                    // Update Progress
-                    duration = item.duration_ms;
-                    position = p.progress_ms;
-                    lastUpdate = Date.now();
-                    el("time-total").innerText = fmt(duration);
-                    el("time-current").innerText = fmt(position);
-
-                    // Update Volume (only if not dragging)
-                    if (p.device) {
-                        if (!isDraggingVol) {
-                            el("vol-slider").value = p.device.volume_percent;
-                        }
-                        if (p.device.volume_percent > 0) {
-                            lastVolume = p.device.volume_percent;
-                        }
-
-                        // Icon Update
-                        var mutePath = "M16.5 12c0-1.77-1.02-3.29-2.5-4.03v2.21l2.45 2.45c.03-.2.05-.41.05-.63zm2.5 0c0 .94-.2 1.82-.54 2.64l1.51 1.51C20.63 14.91 21 13.5 21 12c0-4.28-2.99-7.86-7-8.77v2.06c2.89.86 5 3.54 5 6.71zM4.27 3L3 4.27 7.73 9H3v6h4l5 5v-6.73l4.25 4.25c-.67.52-1.42.93-2.25 1.18v2.06c1.38-.31 2.63-.95 3.69-1.81L19.73 21 21 19.73 4.27 3zM12 4L9.91 6.09 12 8.18V4z";
-                        var volPath = "M3 9v6h4l5 5V4L7 9H3zm13.5 3c0-1.77-1.02-3.29-2.5-4.03v8.05c1.48-.73 2.5-2.25 2.5-4.02zM14 3.23v2.06c2.89.86 5 3.54 5 6.71s-2.11 5.85-5 6.71v2.06c4.01-.91 7-4.49 7-8.77s-2.99-7.86-7-8.77z";
-
-                        el("btn-mute").innerHTML = '<svg viewBox="0 0 24 24"><path d="' + (p.device.volume_percent === 0 ? mutePath : volPath) + '"/></svg>';
-                    }
-                });
-            }
-
-            function fmt(ms) {
-                if (!ms) return "0:00";
-                var s = Math.floor(ms / 1000);
-                var m = Math.floor(s / 60);
-                s = s % 60;
-                return m + ":" + (s < 10 ? "0" + s : s);
-            }
-
-            // Smooth Progress Bar
-            setInterval(function () {
-                if (!isPlaying || !duration) return;
-                var now = Date.now();
-                var estPos = position + (now - lastUpdate);
-                if (estPos > duration) estPos = duration;
-                var pct = (estPos / duration) * 100;
-                el("progress").style.width = pct + "%";
-                el("time-current").innerText = fmt(estPos);
-            }, 100); // 10fps for smoothness
-
-            // Polling Loop
-            setInterval(poll, 3000);
-            poll();
-
-
-            // --- Controls ---
             window.togglePlay = function () {
-                var url = isPlaying ? "/api/player/pause" : "/api/player/play";
-                var body = {};
-                if (!activeDeviceIsActive) body.device_id = activeDeviceId;
-                xhr("PUT", url, body, function () { setTimeout(poll, 500); });
+                sendAction("play_pause");
             };
-            window.nextTrack = function () {
-                var body = {};
-                if (!activeDeviceIsActive) body.device_id = activeDeviceId;
-                xhr("POST", "/api/player/next", body, function () { setTimeout(poll, 500); });
-            };
-            window.prevTrack = function () {
-                var body = {};
-                if (!activeDeviceIsActive) body.device_id = activeDeviceId;
-                xhr("POST", "/api/player/prev", body, function () { setTimeout(poll, 500); });
-            };
+            window.nextTrack = function () { sendAction("next"); };
+            window.prevTrack = function () { sendAction("prev"); };
+            window.volumeDown = function () { sendAction("volume_down"); };
+            window.volumeUp = function () { sendAction("volume_up"); };
 
-            window.toggleShuffle = function () {
-                var body = { state: !shuffleState };
-                if (!activeDeviceIsActive) body.device_id = activeDeviceId;
-                xhr("PUT", "/api/player/shuffle", body, function () { setTimeout(poll, 500); });
-            };
-
-            window.toggleRepeat = function () {
-                var nextState = 'off';
-                if (repeatState === 'off') nextState = 'context';
-                else if (repeatState === 'context') nextState = 'track';
-                else nextState = 'off';
-
-                var body = { state: nextState };
-                if (!activeDeviceIsActive) body.device_id = activeDeviceId;
-                xhr("PUT", "/api/player/repeat", body, function () { setTimeout(poll, 500); });
-            };
-
-            // --- Playlists ---
-            window.openPlaylists = function () {
-                el("drawer").className = "drawer open";
-                loadPlaylists();
-            };
-            window.closePlaylists = function () {
-                el("drawer").className = "drawer";
-            };
-
-            var playlistsLoaded = false;
-            function loadPlaylists() {
-                if (playlistsLoaded) return;
-                xhr("GET", "/api/playlists", null, function (status, text) {
-                    if (status !== 200) return;
-                    var data = JSON.parse(text);
-                    var html = "";
-                    if (data.playlists) {
-                        for (var i = 0; i < data.playlists.length; i++) {
-                            var p = data.playlists[i];
-                            var img = p.image ? ('<img src="' + p.image + '" class="playlist-img">') : '<div class="playlist-img"></div>';
-                            html += '<div class="playlist-item" onclick="playPlaylist(\'' + p.uri + '\')">' +
-                                img +
-                                '<div>' +
-                                '<div class="playlist-name">' + p.name + '</div>' +
-                                '<div class="playlist-meta">' + p.tracks + ' tracks</div>' +
-                                '</div>' +
-                                '</div>';
-                        }
-                    }
-                    el("playlist-list").innerHTML = html;
-                    playlistsLoaded = true;
-                });
-            }
-
-            window.playPlaylist = function (uri) {
-                var body = { context_uri: uri };
-                if (!activeDeviceIsActive) body.device_id = activeDeviceId;
-                xhr("PUT", "/api/player/play", body, function () {
-                    closePlaylists();
-                    setTimeout(poll, 1000);
-                });
-            };
-
-            // --- Devices ---
-            window.openDevices = function () {
-                el("devices-drawer").className = "drawer open";
-                loadDevices();
-            };
-            window.closeDevices = function () {
-                el("devices-drawer").className = "drawer";
-            };
-
-            function loadDevices() {
-                el("device-list").innerHTML = '<div style="text-align:center; padding:20px; opacity:0.5;">Scanning...</div>';
-                xhr("GET", "/api/devices", null, function (status, text) {
-                    if (status !== 200) return;
-                    var data = JSON.parse(text);
-                    var html = "";
-                    if (data.devices) {
-                        for (var i = 0; i < data.devices.length; i++) {
-                            var d = data.devices[i];
-                            var icon = d.type === 'Computer' ? '💻' : (d.type === 'Smartphone' ? '📱' : '🔊');
-                            var activeStyle = d.isActive ? 'color:#1db954; font-weight:700;' : '';
-                            var restrictedTag = d.isRestricted ? ' <span style="font-size:10px; color:#f00;">(Restricted)</span>' : '';
-
-                            html += '<div class="playlist-item" onclick="transferPlayback(\'' + d.id + '\')">' +
-                                '<div style="font-size:24px; margin-right:15px;">' + icon + '</div>' +
-                                '<div>' +
-                                '<div class="playlist-name" style="' + activeStyle + '">' + d.name + restrictedTag + '</div>' +
-                                '<div class="playlist-meta">' + d.type + ' (' + d.id + ')</div>' +
-                                '</div>' +
-                                '</div>';
-                        }
-                        window.cachedDevices = data.devices;
-                    }
-                    html += '<div style="text-align:center; padding:20px; font-size:12px; color:#888; margin-top:10px;">' +
-                        'Missing a device? Open the Spotify app on your phone to wake it up, then reopen this menu.' +
-                        '</div>';
-                    el("device-list").innerHTML = html;
-                    if (autoTransferPending) {
-                        autoTransferPending = false;
-                        autoTakeControl();
-                    }
-                });
-            }
-
-            function autoTakeControl() {
-                if (autoTransferInProgress) return;
-                if (!window.cachedDevices.length) {
-                    autoTransferPending = true;
-                    loadDevices();
-                    return;
-                }
-
-                var preferred = window.cachedDevices.find(function (d) {
-                    return !d.isRestricted && d.name === preferredReceiverName;
-                });
-                if (!preferred) {
-                    preferred = window.cachedDevices.find(function (d) {
-                        return !d.isRestricted && d.type === 'Computer';
-                    });
-                }
-                if (!preferred) {
-                    preferred = window.cachedDevices.find(function (d) {
-                        return !d.isRestricted;
-                    });
-                }
-                if (!preferred) {
-                    return;
-                }
-                if (preferred.id === activeDeviceId) {
-                    return;
-                }
-
-                autoTransferInProgress = true;
-                xhr("PUT", "/api/player/transfer", { device_ids: [preferred.id] }, function () {
-                    autoTransferInProgress = false;
-                    setTimeout(function () {
-                        poll();
-                    }, 1000);
-                });
-            }
-
-            window.takeControl = function () {
-                if (!window.cachedDevices.length) {
-                    loadDevices();
-                    alert("Scanning devices. Try again in a moment.");
-                    return;
-                }
-
-                var preferred = window.cachedDevices.find(function (d) {
-                    return !d.isRestricted && d.type === 'Computer';
-                });
-                if (!preferred) {
-                    preferred = window.cachedDevices.find(function (d) {
-                        return !d.isRestricted;
-                    });
-                }
-                if (!preferred) {
-                    alert("No unrestricted device available. Open Spotify on another client first.");
-                    return;
-                }
-                if (preferred.id === activeDeviceId) {
-                    alert("That device already owns playback.");
-                    return;
-                }
-
-                xhr("PUT", "/api/player/transfer", { device_ids: [preferred.id] }, function () {
-                    setTimeout(function () {
-                        poll();
-                    }, 1000);
-                });
-            };
-
-            function setRestrictedBanner(isRestricted, name) {
-                var banner = el("restricted-banner");
-                if (!banner) return;
-                if (isRestricted) {
-            el("restricted-device-name").innerText = name || "This device";
-                    banner.classList.remove("hidden");
-            var subtext = el("restricted-banner-subtext");
-            if (subtext) {
-                subtext.innerText = "Switching to " + preferredReceiverName + " for control.";
-            }
-                } else {
-                    banner.classList.add("hidden");
-            var subtext = el("restricted-banner-subtext");
-            if (subtext) {
-                subtext.innerText = "";
-            }
-                }
-            }
-
-            function recoverDeviceId(name) {
-                if (!name) return;
-                console.log("Attempting to recover ID for: " + name);
-                xhr("GET", "/api/devices", null, function (status, text) {
-                    if (status !== 200) return;
-                    try {
-                        var data = JSON.parse(text);
-                        if (data.devices) {
-                            for (var i = 0; i < data.devices.length; i++) {
-                                if (data.devices[i].name === name) {
-                                    console.log("Recovered ID: " + data.devices[i].id);
-                                    activeDeviceId = data.devices[i].id;
-                                    // Force a UI update immediately
-                                    el("device").innerHTML = name + " <span style='font-size:8px; opacity:0.5'>(" + activeDeviceId + ")</span>";
-                                    break;
-                                }
-                            }
-                        }
-                    } catch (e) { }
-                });
-            }
-
-            window.transferPlayback = function (id) {
-                el("device-list").innerHTML = '<div style="text-align:center; padding:20px; opacity:0.5;">Connecting...</div>';
-                activeDeviceId = id; // Optimistic update
-                xhr("PUT", "/api/player/transfer", { device_ids: [id] }, function () {
-                    setTimeout(function () {
-                        closeDevices();
-                        poll();
-                    }, 1000);
-                });
-            };
-
-            // --- Volume ---
             window.onVolInput = function (val) {
-                isDraggingVol = true;
-                var now = Date.now();
-                // Throttle: only send every 300ms
-                if (now - lastVolSend > 300) {
-                    var body = { volume_percent: parseInt(val) };
-                    if (!activeDeviceIsActive) body.device_id = activeDeviceId;
-                    xhr("PUT", "/api/player/volume", body);
-                    lastVolSend = now;
-                }
+                timeCurrent.innerHTML = "VOL";
+                timeTotal.innerHTML = String(val) + "%";
             };
 
             window.onVolChange = function (val) {
-                // Final update on release
-                var body = { volume_percent: parseInt(val) };
-                if (!activeDeviceIsActive) body.device_id = activeDeviceId;
-                xhr("PUT", "/api/player/volume", body, function () {
-                    setTimeout(function () { isDraggingVol = false; }, 500);
-                });
+                var v = parseInt(val, 10);
+                if (isNaN(v)) return;
+                lastVolume = v;
+                sendAction("volume_set", v);
             };
 
             window.toggleMute = function () {
-                var current = parseInt(el("vol-slider").value);
-                var target = 0;
-                if (current === 0) {
-                    target = lastVolume || 50;
+                if (isMuted) {
+                    sendAction("unmute");
+                    isMuted = false;
+                    volSlider.value = lastVolume;
                 } else {
-                    lastVolume = current;
-                    target = 0;
+                    sendAction("mute");
+                    isMuted = true;
+                    lastVolume = parseInt(volSlider.value, 10) || lastVolume;
+                    volSlider.value = 0;
                 }
-                // Optimistic Update
-                el("vol-slider").value = target;
-                var body = { volume_percent: target };
-                if (!activeDeviceIsActive) body.device_id = activeDeviceId;
-                xhr("PUT", "/api/player/volume", body);
+                window.onVolInput(volSlider.value);
             };
 
+            function init() {
+                trackEl.innerHTML = "Sonos Remote";
+                setStatus("Ready");
+                speakerSelect.value = loadSpeaker();
+                speakerSelect.onchange = function () {
+                    saveSpeaker(speakerSelect.value);
+                    setDeviceLabel();
+                };
+                setDeviceLabel();
+                window.onVolInput(volSlider.value);
+            }
+
+            init();
         })();
     </script>
 </body>
