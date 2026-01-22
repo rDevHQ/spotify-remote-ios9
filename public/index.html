@@ -305,6 +305,37 @@
             box-shadow: 0 2px 4px rgba(0, 0, 0, 0.5);
         }
 
+        .restricted-banner {
+            display: flex;
+            align-items: center;
+            gap: 12px;
+            background: rgba(255, 0, 0, 0.1);
+            border-radius: 12px;
+            padding: 10px 16px;
+            margin: 0 20px 10px;
+            border: 1px solid rgba(255, 0, 0, 0.3);
+            font-size: 12px;
+            color: #fff;
+        }
+
+        .restricted-banner.hidden {
+            display: none;
+        }
+
+        .restricted-banner .banner-btn {
+            padding: 6px 10px;
+            background: rgba(255, 255, 255, 0.1);
+            border: 1px solid rgba(255, 255, 255, 0.2);
+            border-radius: 8px;
+            font-size: 12px;
+            color: #fff;
+            cursor: pointer;
+        }
+
+        .restricted-banner .banner-btn:hover {
+            background: rgba(255, 255, 255, 0.2);
+        }
+
         /* Bottom Actions */
         .actions {
             flex-shrink: 0;
@@ -536,6 +567,14 @@
         </div>
     </div>
 
+    <div id="restricted-banner" class="restricted-banner hidden">
+        <div style="flex:1">
+            <strong id="restricted-device-name"></strong> is restricted. Transfers to this device will fail.
+        </div>
+        <button class="action-btn banner-btn" onclick="takeControl()">Take control</button>
+        <button class="action-btn banner-btn" onclick="openDevices()">Choose another device</button>
+    </div>
+
     <div class="actions">
         <div id="device" class="device-info" onclick="openDevices()"></div>
         <button class="action-btn" onclick="openPlaylists()">Playlists</button>
@@ -635,6 +674,7 @@
                     var deviceName = (p.device) ? p.device.name : "";
                     if (isRestricted) deviceName += " <span style='color:#f00; font-size:10px;'>(RESTRICTED)</span>";
                     el("device").innerHTML = deviceName + " <span style='font-size:8px; opacity:0.5'>(" + (p.device ? (p.device.id || activeDeviceId || '?') : '?') + ")</span>";
+                    setRestrictedBanner(isRestricted, p.device ? p.device.name : "Device");
                     
                     if (p.device && p.device.id) {
                         activeDeviceId = p.device.id;
@@ -832,6 +872,48 @@
                         '</div>';
                     el("device-list").innerHTML = html;
                 });
+            }
+
+            window.takeControl = function () {
+                if (!window.cachedDevices.length) {
+                    loadDevices();
+                    alert("Scanning devices. Try again in a moment.");
+                    return;
+                }
+
+                var preferred = window.cachedDevices.find(function (d) {
+                    return !d.isRestricted && d.type === 'Computer';
+                });
+                if (!preferred) {
+                    preferred = window.cachedDevices.find(function (d) {
+                        return !d.isRestricted;
+                    });
+                }
+                if (!preferred) {
+                    alert("No unrestricted device available. Open Spotify on another client first.");
+                    return;
+                }
+                if (preferred.id === activeDeviceId) {
+                    alert("That device already owns playback.");
+                    return;
+                }
+
+                xhr("PUT", "/api/player/transfer", { device_ids: [preferred.id] }, function () {
+                    setTimeout(function () {
+                        poll();
+                    }, 1000);
+                });
+            };
+
+            function setRestrictedBanner(isRestricted, name) {
+                var banner = el("restricted-banner");
+                if (!banner) return;
+                if (isRestricted) {
+                    el("restricted-device-name").innerText = name || "This device";
+                    banner.classList.remove("hidden");
+                } else {
+                    banner.classList.add("hidden");
+                }
             }
 
             function recoverDeviceId(name) {
