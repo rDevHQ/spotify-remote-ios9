@@ -592,6 +592,9 @@
                 if (body) r.setRequestHeader("Content-Type", "application/json");
                 r.onreadystatechange = function () {
                     if (r.readyState === 4) {
+                        if (r.status >= 400 && url.indexOf("/api/player/") !== -1) {
+                            alert("Error " + r.status + ": " + r.responseText);
+                        }
                         if (cb) cb(r.status, r.responseText);
                     }
                 };
@@ -626,7 +629,7 @@
                     // Update Text
                     el("track").innerHTML = item.name;
                     el("artist").innerHTML = (item.artists && item.artists[0]) ? item.artists[0].name : "";
-                    el("device").innerHTML = (p.device) ? p.device.name : "";
+                    el("device").innerHTML = (p.device) ? (p.device.name + " <span style='font-size:8px; opacity:0.5'>(" + p.device.id + ")</span>") : "";
                     if (p.device) activeDeviceId = p.device.id;
 
                     // Update Cover
@@ -794,6 +797,9 @@
                                 '</div>';
                         }
                     }
+                    html += '<div style="text-align:center; padding:20px; font-size:12px; color:#888; margin-top:10px;">' +
+                        'Missing a device? Open the Spotify app on your phone to wake it up, then reopen this menu.' +
+                        '</div>';
                     el("device-list").innerHTML = html;
                 });
             }
