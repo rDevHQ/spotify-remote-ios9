@@ -1,0 +1,9 @@
+[global]
+username = YOUR_SPOTIFY_USERNAME
+password = YOUR_SPOTIFY_PASSWORD
+device_name = ZimaOS Spotifyd
+backend = rodio
+bitrate = 160
+volume_range = 0..100
+volume_controller = mixer
+cache = true
