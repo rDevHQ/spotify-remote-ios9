@@ -16,12 +16,3 @@ services:
     x-casaos:
       icon: https://raw.githubusercontent.com/rDevHQ/spotify-remote-ios9/main/public/favicon.png
 
-  spotifyd:
-    image: docker.io/gallows/spotifyd:latest
-    container_name: spotifyd
-    restart: unless-stopped
-    volumes:
-      - /DATA/AppData/spotifyd/conf:/config
-    devices:
-      - /dev/snd:/dev/snd
-    command: ["spotifyd", "--config-path", "/config/spotifyd.conf"]

@@ -27,8 +27,6 @@ You **must** set the following environment variables.
 | `SPOTIFY_CLIENT_SECRET` | Your Spotify App Client Secret |
 | `SPOTIFY_REDIRECT_URI` | `https://<your-domain>/api/callback` |
 | `COOKIE_SECRET` | A long random string for security |
-| `HA_WEBHOOK_URL` | `http://homeassistant.local:8123/api/webhook/sonos_remote_control` |
-
 ### 3. Persistence (Important!)
 
 To ensure you don't have to log in deeply every time the server restarts, map a volume to `/data`:
@@ -47,20 +45,9 @@ volumes:
 5.  **Done!** The server has saved your access token to `/data/spotify_token.json`.
 6.  Now open `http://<your-server-ip>:3010` on your **iOS 9 iPad**. It will work immediately!
 
-## Optional: add a Spotifyd receiver
-
-If you want a stable Connect endpoint beside Sonos (so the web remote can grab ownership before issuing commands), run Spotifyd on the same host. Spotifyd registers itself as a Spotify Connect device, so you can transfer playback to it from this app and control the music without hitting the `403 Restricted device` error. The steps are:
-
-1.  Install/configure Spotifyd on ZimaOS. You can reuse the optional `spotifyd` service that we added to `docker-compose.yml` (it now pulls the `gallows/spotifyd` image which is available on Docker Hub). Copy `spotifyd.conf.example` into your config folder (e.g. `/DATA/AppData/spotifyd/conf/spotifyd.conf`), fill in your Spotify credentials plus a friendly `device_name`, and restart the container so the `--config-path /config/spotifyd.conf` command is read.
-2.  Start the Spotifyd container in parallel with the remote. Make sure it has access to your sound hardware (bind `/dev/snd` if needed) so Spotifyd can actually render audio.
-3.  Transfer playback to the Spotifyd device from the web app (the device picker shows its name). Once Spotifyd owns playback, all controls work again and you can return to Sonos by transferring playback back later.
-4.  The app now detects when a restricted device (Sonos) is active and silently hands control to Spotifyd so playback controls keep working; the banner explains what happened and lets you choose a different device if you want.
-
 ## Home Assistant webhook proxy
 
 On older iOS Safari, direct HTTP calls to `http://homeassistant.local:8123` from an HTTPS page can be blocked. The remote now posts to `/api/sonos-control` on the same origin and the server forwards to your Home Assistant webhook. Set `HA_WEBHOOK_URL` to your full webhook URL to enable this proxy.
-
-Spotifyd documentation: https://github.com/Spotifyd/spotifyd
 
 ### Attribution
 
