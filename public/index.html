@@ -305,44 +305,6 @@
             box-shadow: 0 2px 4px rgba(0, 0, 0, 0.5);
         }
 
-        .restricted-banner {
-            display: flex;
-            align-items: center;
-            gap: 12px;
-            background: rgba(255, 0, 0, 0.1);
-            border-radius: 12px;
-            padding: 10px 16px;
-            margin: 0 20px 10px;
-            border: 1px solid rgba(255, 0, 0, 0.3);
-            font-size: 12px;
-            color: #fff;
-        }
-
-        .restricted-banner.hidden {
-            display: none;
-        }
-
-        .restricted-banner .banner-btn {
-            padding: 6px 10px;
-            background: rgba(255, 255, 255, 0.1);
-            border: 1px solid rgba(255, 255, 255, 0.2);
-            border-radius: 8px;
-            font-size: 12px;
-            color: #fff;
-            cursor: pointer;
-        }
-
-        .restricted-banner .banner-btn:hover {
-            background: rgba(255, 255, 255, 0.2);
-        }
-
-        .restricted-banner .banner-subtext {
-            font-size: 11px;
-            color: #fff;
-            opacity: 0.8;
-            margin-top: 4px;
-        }
-
         /* Bottom Actions */
         .actions {
             flex-shrink: 0;
@@ -573,22 +535,13 @@
         </div>
     </div>
 
-    <div id="restricted-banner" class="restricted-banner hidden">
-        <div style="flex:1">
-            <strong id="restricted-device-name"></strong> is restricted. Transfers to this device will fail.
-            <div id="restricted-banner-subtext" class="banner-subtext"></div>
-        </div>
-        <button class="action-btn banner-btn" onclick="takeControl()">Take control</button>
-        <button class="action-btn banner-btn" onclick="openDevices()">Choose another device</button>
-    </div>
-
     <div class="actions">
         <select id="speaker-select" class="device-info">
             <option value="kitchen">Kitchen</option>
             <option value="livingroom">Living Room</option>
             <option value="bedroom">Bedroom</option>
         </select>
-        <div id="device" class="action-btn">Now playing: —</div>
+        <button class="action-btn" onclick="openPlaylists()">Playlists</button>
     </div>
 
     <!-- Login Overlay -->
@@ -609,82 +562,144 @@
         </div>
     </div>
 
-    <!-- Devices Drawer -->
-    <div id="devices-drawer" class="drawer">
-        <div class="drawer-header">
-            <div class="drawer-title">Connect to Device</div>
-            <button class="close-btn" onclick="closeDevices()">✕</button>
-        </div>
-        <div id="device-list" class="playlist-list">
-            <div style="text-align:center; padding:20px; opacity:0.5;">Loading Devices...</div>
-        </div>
-    </div>
-
     <script>
         (function () {
             var WEBHOOK_URL = "http://homeassistant.local:8123/api/webhook/sonos_remote_control";
-            var speakerSelect = document.getElementById("speaker-select");
-            var trackEl = document.getElementById("track");
-            var artistEl = document.getElementById("artist");
-            var deviceEl = document.getElementById("device");
-            var volSlider = document.getElementById("vol-slider");
-            var timeCurrent = document.getElementById("time-current");
-            var timeTotal = document.getElementById("time-total");
+            var isPlaying = false;
+            var duration = 0;
+            var position = 0;
+            var lastUpdate = 0;
+            var isDraggingVol = false;
             var lastVolume = 50;
             var isMuted = false;
 
-            function setStatus(text) {
-                artistEl.innerHTML = text;
-            }
+            function el(id) { return document.getElementById(id); }
 
-            function setDeviceLabel() {
-                var label = speakerSelect.options[speakerSelect.selectedIndex].text;
-                deviceEl.innerHTML = "Now playing: " + label;
-            }
-
-            function saveSpeaker(value) {
-                try {
-                    localStorage.setItem("sonosSpeaker", value);
-                } catch (e) {}
-            }
-
-            function loadSpeaker() {
-                try {
-                    return localStorage.getItem("sonosSpeaker") || "kitchen";
-                } catch (e) {
-                    return "kitchen";
-                }
+            function xhrSpotify(method, url, body, cb) {
+                var r = new XMLHttpRequest();
+                r.open(method, url, true);
+                if (body) r.setRequestHeader("Content-Type", "application/json");
+                r.onreadystatechange = function () {
+                    if (r.readyState === 4) {
+                        if (cb) cb(r.status, r.responseText);
+                    }
+                };
+                r.send(body ? JSON.stringify(body) : null);
             }
 
             function sendAction(action, volume) {
                 var payload = {
-                    player: speakerSelect.value,
+                    player: el("speaker-select").value,
                     action: action
                 };
                 if (action === "volume_set") payload.volume = volume;
 
-                var xhr = new XMLHttpRequest();
-                xhr.open("POST", WEBHOOK_URL, true);
-                xhr.setRequestHeader("Content-Type", "application/json");
-                xhr.onreadystatechange = function () {
-                    if (xhr.readyState === 4) {
-                        setStatus("Sent: " + action);
-                    }
-                };
-                xhr.send(JSON.stringify(payload));
+                var r = new XMLHttpRequest();
+                r.open("POST", WEBHOOK_URL, true);
+                r.setRequestHeader("Content-Type", "application/json");
+                r.send(JSON.stringify(payload));
+
+                el("artist").innerHTML = "Sent: " + action;
             }
+
+            function updatePlayIcon() {
+                var playSvg = '<svg viewBox="0 0 24 24"><path d="M8 5v14l11-7z"/></svg>';
+                var pauseSvg = '<svg viewBox="0 0 24 24"><path d="M6 19h4V5H6v14zm8-14v14h4V5h-4z"/></svg>';
+                el("playBtn").innerHTML = isPlaying ? pauseSvg : playSvg;
+            }
+
+            function updateMuteIcon(vol) {
+                var mutePath = "M16.5 12c0-1.77-1.02-3.29-2.5-4.03v2.21l2.45 2.45c.03-.2.05-.41.05-.63zm2.5 0c0 .94-.2 1.82-.54 2.64l1.51 1.51C20.63 14.91 21 13.5 21 12c0-4.28-2.99-7.86-7-8.77v2.06c2.89.86 5 3.54 5 6.71zM4.27 3L3 4.27 7.73 9H3v6h4l5 5v-6.73l4.25 4.25c-.67.52-1.42.93-2.25 1.18v2.06c1.38-.31 2.63-.95 3.69-1.81L19.73 21 21 19.73 4.27 3zM12 4L9.91 6.09 12 8.18V4z";
+                var volPath = "M3 9v6h4l5 5V4L7 9H3zm13.5 3c0-1.77-1.02-3.29-2.5-4.03v8.05c1.48-.73 2.5-2.25 2.5-4.02zM14 3.23v2.06c2.89.86 5 3.54 5 6.71s-2.11 5.85-5 6.71v2.06c4.01-.91 7-4.49 7-8.77s-2.99-7.86-7-8.77z";
+                el("btn-mute").innerHTML = '<svg viewBox="0 0 24 24"><path d="' + (vol === 0 ? mutePath : volPath) + '"/></svg>';
+            }
+
+            function fmt(ms) {
+                if (!ms) return "0:00";
+                var s = Math.floor(ms / 1000);
+                var m = Math.floor(s / 60);
+                s = s % 60;
+                return m + ":" + (s < 10 ? "0" + s : s);
+            }
+
+            function poll() {
+                xhrSpotify("GET", "/api/player/status", null, function (status, text) {
+                    if (status === 401) {
+                        el("login-modal").style.display = "flex";
+                        return;
+                    }
+                    el("login-modal").style.display = "none";
+
+                    var json = null;
+                    try { json = JSON.parse(text); } catch (e) {}
+
+                    if (!json || !json.player || !json.player.item) {
+                        el("track").innerHTML = "Not Playing";
+                        el("artist").innerHTML = "Open Spotify on a device";
+                        el("cover").style.display = "none";
+                        el("no-cover").style.display = "flex";
+                        el("progress").style.width = "0%";
+                        duration = 0;
+                        position = 0;
+                        updatePlayIcon();
+                        return;
+                    }
+
+                    var p = json.player;
+                    var item = p.item;
+
+                    el("track").innerHTML = item.name;
+                    el("artist").innerHTML = (item.artists && item.artists[0]) ? item.artists[0].name : "";
+
+                    if (item.album && item.album.images && item.album.images.length) {
+                        el("cover").src = item.album.images[0].url;
+                        el("cover").style.display = "block";
+                        el("no-cover").style.display = "none";
+                    }
+
+                    isPlaying = p.is_playing;
+                    updatePlayIcon();
+
+                    duration = item.duration_ms;
+                    position = p.progress_ms;
+                    lastUpdate = Date.now();
+                    el("time-total").innerText = fmt(duration);
+                    el("time-current").innerText = fmt(position);
+
+                    if (p.device) {
+                        if (!isDraggingVol) {
+                            el("vol-slider").value = p.device.volume_percent;
+                        }
+                        if (p.device.volume_percent > 0) {
+                            lastVolume = p.device.volume_percent;
+                        }
+                        updateMuteIcon(p.device.volume_percent);
+                    }
+                });
+            }
+
+            // Smooth Progress Bar
+            setInterval(function () {
+                if (!isPlaying || !duration) return;
+                var now = Date.now();
+                var estPos = position + (now - lastUpdate);
+                if (estPos > duration) estPos = duration;
+                var pct = (estPos / duration) * 100;
+                el("progress").style.width = pct + "%";
+                el("time-current").innerText = fmt(estPos);
+            }, 100);
 
             window.togglePlay = function () {
                 sendAction("play_pause");
+                setTimeout(poll, 500);
             };
-            window.nextTrack = function () { sendAction("next"); };
-            window.prevTrack = function () { sendAction("prev"); };
+            window.nextTrack = function () { sendAction("next"); setTimeout(poll, 500); };
+            window.prevTrack = function () { sendAction("prev"); setTimeout(poll, 500); };
             window.volumeDown = function () { sendAction("volume_down"); };
             window.volumeUp = function () { sendAction("volume_up"); };
 
-            window.onVolInput = function (val) {
-                timeCurrent.innerHTML = "VOL";
-                timeTotal.innerHTML = String(val) + "%";
+            window.onVolInput = function () {
+                isDraggingVol = true;
             };
 
             window.onVolChange = function (val) {
@@ -692,32 +707,75 @@
                 if (isNaN(v)) return;
                 lastVolume = v;
                 sendAction("volume_set", v);
+                setTimeout(function () { isDraggingVol = false; }, 300);
             };
 
             window.toggleMute = function () {
+                var slider = el("vol-slider");
                 if (isMuted) {
                     sendAction("unmute");
                     isMuted = false;
-                    volSlider.value = lastVolume;
+                    slider.value = lastVolume;
                 } else {
                     sendAction("mute");
                     isMuted = true;
-                    lastVolume = parseInt(volSlider.value, 10) || lastVolume;
-                    volSlider.value = 0;
+                    lastVolume = parseInt(slider.value, 10) || lastVolume;
+                    slider.value = 0;
                 }
-                window.onVolInput(volSlider.value);
+                updateMuteIcon(parseInt(slider.value, 10));
+            };
+
+            window.openPlaylists = function () {
+                el("drawer").className = "drawer open";
+                loadPlaylists();
+            };
+            window.closePlaylists = function () {
+                el("drawer").className = "drawer";
+            };
+
+            var playlistsLoaded = false;
+            function loadPlaylists() {
+                if (playlistsLoaded) return;
+                xhrSpotify("GET", "/api/playlists", null, function (status, text) {
+                    if (status !== 200) return;
+                    var data = JSON.parse(text);
+                    var html = "";
+                    if (data.playlists) {
+                        for (var i = 0; i < data.playlists.length; i++) {
+                            var p = data.playlists[i];
+                            var img = p.image ? ('<img src="' + p.image + '" class="playlist-img">') : '<div class="playlist-img"></div>';
+                            html += '<div class="playlist-item" onclick="playPlaylist(&quot;' + p.uri + '&quot;)">' +
+                                img +
+                                '<div>' +
+                                '<div class="playlist-name">' + p.name + '</div>' +
+                                '<div class="playlist-meta">' + p.tracks + ' tracks</div>' +
+                                '</div>' +
+                                '</div>';
+                        }
+                    }
+                    el("playlist-list").innerHTML = html;
+                    playlistsLoaded = true;
+                });
+            }
+
+            window.playPlaylist = function (uri) {
+                xhrSpotify("PUT", "/api/player/play", { context_uri: uri }, function () {
+                    closePlaylists();
+                    setTimeout(poll, 1000);
+                });
             };
 
             function init() {
-                trackEl.innerHTML = "Sonos Remote";
-                setStatus("Ready");
-                speakerSelect.value = loadSpeaker();
-                speakerSelect.onchange = function () {
-                    saveSpeaker(speakerSelect.value);
-                    setDeviceLabel();
+                el("track").innerHTML = "Not Playing";
+                el("artist").innerHTML = "Ready";
+                el("speaker-select").value = (function () {
+                    try { return localStorage.getItem("sonosSpeaker") || "kitchen"; } catch (e) { return "kitchen"; }
+                })();
+                el("speaker-select").onchange = function () {
+                    try { localStorage.setItem("sonosSpeaker", el("speaker-select").value); } catch (e) {}
                 };
-                setDeviceLabel();
-                window.onVolInput(volSlider.value);
+                poll();
+                setInterval(poll, 3000);
             }
 
             init();
