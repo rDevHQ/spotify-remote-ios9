@@ -29,6 +29,7 @@
             text-align: center;
             padding: 15px 0;
             flex-shrink: 0;
+            margin-bottom: -20px;
         }
 
         .logo {
@@ -326,17 +327,25 @@
             font-size: 14px;
         }
 
-        .device-info {
+        #speaker-select {
             font-size: 12px;
             color: #1db954;
             font-weight: 600;
             text-transform: uppercase;
             letter-spacing: 1px;
             cursor: pointer;
-            /* Clickable */
-            padding: 5px 10px;
-            border-radius: 10px;
-            background: rgba(255, 255, 255, 0.05);
+            padding: 4px 8px;
+            border-radius: 12px;
+            background: #15171c;
+            border: 1px solid #2f333c;
+            -webkit-appearance: none;
+            appearance: none;
+            color: #f1f3f5;
+        }
+
+        #speaker-select option {
+            background: #121212;
+            color: #f1f3f5;
         }
 
         .device-info:active {
