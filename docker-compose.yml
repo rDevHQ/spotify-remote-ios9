@@ -16,7 +16,7 @@ services:
       icon: https://raw.githubusercontent.com/rDevHQ/spotify-remote-ios9/main/public/favicon.png
 
   spotifyd:
-    image: docker.io/spotifyd/spotifyd:latest
+    image: docker.io/gallows/spotifyd:latest
     container_name: spotifyd
     restart: unless-stopped
     volumes:
