@@ -583,6 +583,7 @@
             var lastVolSend = 0;
             var lastVolume = 50; // default for restore
             var activeDeviceId = null;
+            window.cachedDevices = []; // Global cache for recovery
 
             function el(id) { return document.getElementById(id); }
 
@@ -630,7 +631,13 @@
                     el("track").innerHTML = item.name;
                     el("artist").innerHTML = (item.artists && item.artists[0]) ? item.artists[0].name : "";
                     el("device").innerHTML = (p.device) ? (p.device.name + " <span style='font-size:8px; opacity:0.5'>(" + (p.device.id || activeDeviceId || '?') + ")</span>") : "";
-                    if (p.device && p.device.id) activeDeviceId = p.device.id;
+                    el("device").innerHTML = (p.device) ? (p.device.name + " <span style='font-size:8px; opacity:0.5'>(" + (p.device.id || activeDeviceId || '?') + ")</span>") : "";
+                    if (p.device && p.device.id) {
+                        activeDeviceId = p.device.id;
+                    } else if (p.device && !p.device.id && !activeDeviceId) {
+                        // ID missing and we don't have one cached. Try to recover it.
+                        recoverDeviceId(p.device.name);
+                    }
 
                     // Update Cover
                     if (item.album && item.album.images && item.album.images.length) {
@@ -796,11 +803,34 @@
                                 '</div>' +
                                 '</div>';
                         }
+                        window.cachedDevices = data.devices;
                     }
                     html += '<div style="text-align:center; padding:20px; font-size:12px; color:#888; margin-top:10px;">' +
                         'Missing a device? Open the Spotify app on your phone to wake it up, then reopen this menu.' +
                         '</div>';
                     el("device-list").innerHTML = html;
+                });
+            }
+
+            function recoverDeviceId(name) {
+                if (!name) return;
+                console.log("Attempting to recover ID for: " + name);
+                xhr("GET", "/api/devices", null, function (status, text) {
+                    if (status !== 200) return;
+                    try {
+                        var data = JSON.parse(text);
+                        if (data.devices) {
+                            for (var i = 0; i < data.devices.length; i++) {
+                                if (data.devices[i].name === name) {
+                                    console.log("Recovered ID: " + data.devices[i].id);
+                                    activeDeviceId = data.devices[i].id;
+                                    // Force a UI update immediately
+                                    el("device").innerHTML = name + " <span style='font-size:8px; opacity:0.5'>(" + activeDeviceId + ")</span>";
+                                    break;
+                                }
+                            }
+                        }
+                    } catch (e) { }
                 });
             }
 
