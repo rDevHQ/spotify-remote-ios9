@@ -15,4 +15,3 @@ services:
       - /DATA/AppData/spotify-remote/data:/data
     x-casaos:
       icon: https://raw.githubusercontent.com/rDevHQ/spotify-remote-ios9/main/public/favicon.png
-
