@@ -15,8 +15,21 @@ export default async function handler(req, res) {
       body: JSON.stringify(payload),
     });
     const text = await r.text();
-    return res.status(r.status || 200).send(text || "");
+    if (!r.ok) {
+      return res.status(502).json({
+        ok: false,
+        error: "Home Assistant webhook failed",
+        status: r.status,
+        body: text,
+      });
+    }
+    return res.status(200).send(text || "");
   } catch (e) {
-    return res.status(502).json({ ok: false, error: String(e) });
+    console.error("sonos-control proxy error:", e);
+    return res.status(502).json({
+      ok: false,
+      error: "Home Assistant webhook unreachable",
+      detail: String(e),
+    });
   }
 }
