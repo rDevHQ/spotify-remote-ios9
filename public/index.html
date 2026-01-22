@@ -629,8 +629,8 @@
                     // Update Text
                     el("track").innerHTML = item.name;
                     el("artist").innerHTML = (item.artists && item.artists[0]) ? item.artists[0].name : "";
-                    el("device").innerHTML = (p.device) ? (p.device.name + " <span style='font-size:8px; opacity:0.5'>(" + p.device.id + ")</span>") : "";
-                    if (p.device) activeDeviceId = p.device.id;
+                    el("device").innerHTML = (p.device) ? (p.device.name + " <span style='font-size:8px; opacity:0.5'>(" + (p.device.id || activeDeviceId || '?') + ")</span>") : "";
+                    if (p.device && p.device.id) activeDeviceId = p.device.id;
 
                     // Update Cover
                     if (item.album && item.album.images && item.album.images.length) {
@@ -792,7 +792,7 @@
                                 '<div style="font-size:24px; margin-right:15px;">' + icon + '</div>' +
                                 '<div>' +
                                 '<div class="playlist-name" style="' + activeStyle + '">' + d.name + '</div>' +
-                                '<div class="playlist-meta">' + d.type + '</div>' +
+                                '<div class="playlist-meta">' + d.type + ' (' + d.id + ')</div>' +
                                 '</div>' +
                                 '</div>';
                         }
