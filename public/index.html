@@ -336,6 +336,13 @@
             background: rgba(255, 255, 255, 0.2);
         }
 
+        .restricted-banner .banner-subtext {
+            font-size: 11px;
+            color: #fff;
+            opacity: 0.8;
+            margin-top: 4px;
+        }
+
         /* Bottom Actions */
         .actions {
             flex-shrink: 0;
@@ -570,6 +577,7 @@
     <div id="restricted-banner" class="restricted-banner hidden">
         <div style="flex:1">
             <strong id="restricted-device-name"></strong> is restricted. Transfers to this device will fail.
+            <div id="restricted-banner-subtext" class="banner-subtext"></div>
         </div>
         <button class="action-btn banner-btn" onclick="takeControl()">Take control</button>
         <button class="action-btn banner-btn" onclick="openDevices()">Choose another device</button>
@@ -624,6 +632,10 @@
             var activeDeviceId = null;
             var activeDeviceIsActive = false;
             window.cachedDevices = []; // Global cache for recovery
+            var preferredReceiverName = window.PREFERRED_RECEIVER_NAME || "ZimaOS Spotifyd";
+            var autoTransferInProgress = false;
+            var autoTransferPending = false;
+            var autoTransferTriggeredFor = null;
 
             function el(id) { return document.getElementById(id); }
 
@@ -674,7 +686,7 @@
                     var deviceName = (p.device) ? p.device.name : "";
                     if (isRestricted) deviceName += " <span style='color:#f00; font-size:10px;'>(RESTRICTED)</span>";
                     el("device").innerHTML = deviceName + " <span style='font-size:8px; opacity:0.5'>(" + (p.device ? (p.device.id || activeDeviceId || '?') : '?') + ")</span>";
-                    setRestrictedBanner(isRestricted, p.device ? p.device.name : "Device");
+                    setRestrictedBanner(isRestricted, p.device ? p.device.name : preferredReceiverName);
                     
                     if (p.device && p.device.id) {
                         activeDeviceId = p.device.id;
@@ -682,6 +694,15 @@
                     } else if (p.device && !p.device.id && !activeDeviceId) {
                         // ID missing and we don't have one cached. Try to recover it.
                         recoverDeviceId(p.device.name);
+                    }
+
+                    if (isRestricted && p.device && p.device.id) {
+                        if (autoTransferTriggeredFor !== p.device.id && !autoTransferInProgress) {
+                            autoTransferTriggeredFor = p.device.id;
+                            autoTakeControl();
+                        }
+                    } else {
+                        autoTransferTriggeredFor = null;
                     }
 
                     // Update Cover
@@ -871,6 +892,47 @@
                         'Missing a device? Open the Spotify app on your phone to wake it up, then reopen this menu.' +
                         '</div>';
                     el("device-list").innerHTML = html;
+                    if (autoTransferPending) {
+                        autoTransferPending = false;
+                        autoTakeControl();
+                    }
+                });
+            }
+
+            function autoTakeControl() {
+                if (autoTransferInProgress) return;
+                if (!window.cachedDevices.length) {
+                    autoTransferPending = true;
+                    loadDevices();
+                    return;
+                }
+
+                var preferred = window.cachedDevices.find(function (d) {
+                    return !d.isRestricted && d.name === preferredReceiverName;
+                });
+                if (!preferred) {
+                    preferred = window.cachedDevices.find(function (d) {
+                        return !d.isRestricted && d.type === 'Computer';
+                    });
+                }
+                if (!preferred) {
+                    preferred = window.cachedDevices.find(function (d) {
+                        return !d.isRestricted;
+                    });
+                }
+                if (!preferred) {
+                    return;
+                }
+                if (preferred.id === activeDeviceId) {
+                    return;
+                }
+
+                autoTransferInProgress = true;
+                xhr("PUT", "/api/player/transfer", { device_ids: [preferred.id] }, function () {
+                    autoTransferInProgress = false;
+                    setTimeout(function () {
+                        poll();
+                    }, 1000);
                 });
             }
 
@@ -909,10 +971,18 @@
                 var banner = el("restricted-banner");
                 if (!banner) return;
                 if (isRestricted) {
-                    el("restricted-device-name").innerText = name || "This device";
+            el("restricted-device-name").innerText = name || "This device";
                     banner.classList.remove("hidden");
+            var subtext = el("restricted-banner-subtext");
+            if (subtext) {
+                subtext.innerText = "Switching to " + preferredReceiverName + " for control.";
+            }
                 } else {
                     banner.classList.add("hidden");
+            var subtext = el("restricted-banner-subtext");
+            if (subtext) {
+                subtext.innerText = "";
+            }
                 }
             }
 
