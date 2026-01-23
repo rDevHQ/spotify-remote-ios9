@@ -309,43 +309,38 @@
         /* Bottom Actions */
         .actions {
             flex-shrink: 0;
-            padding: 20px;
+            padding: 10px 20px 24px;
             display: flex;
-            justify-content: space-between;
+            flex-direction: column;
             align-items: center;
             background: #181818;
             border-top: 1px solid #282828;
         }
 
-        .action-btn {
-            background: #282828;
-            color: #fff;
-            border: 0;
-            padding: 10px 20px;
-            border-radius: 20px;
-            font-weight: 600;
+        .device-grid {
+            width: 100%;
+            display: flex;
+            flex-wrap: wrap;
+            gap: 10px;
+            justify-content: center;
+            margin-top: 12px;
+        }
+
+        .device-btn {
+            min-width: 120px;
+            padding: 10px;
             font-size: 14px;
-        }
-
-        #speaker-select {
-            font-size: 12px;
-            color: #1db954;
-            font-weight: 600;
-            text-transform: uppercase;
-            letter-spacing: 1px;
-            cursor: pointer;
-            padding: 4px 8px;
             border-radius: 12px;
-            background: #15171c;
             border: 1px solid #2f333c;
-            -webkit-appearance: none;
-            appearance: none;
+            background: #15171c;
             color: #f1f3f5;
+            cursor: pointer;
         }
 
-        #speaker-select option {
-            background: #121212;
-            color: #f1f3f5;
+        .device-btn.selected {
+            background: #1db954;
+            border-color: #1db954;
+            color: #000;
         }
 
         .device-info:active {
@@ -545,12 +540,8 @@
     </div>
 
     <div class="actions">
-        <select id="speaker-select" class="device-info">
-            <option value="kitchen">Kitchen</option>
-            <option value="livingroom">Living Room</option>
-            <option value="bedroom">Bedroom</option>
-        </select>
         <button class="action-btn" onclick="openPlaylists()">Playlists</button>
+        <div id="device-grid" class="device-grid"></div>
     </div>
 
     <!-- Login Overlay -->
@@ -581,8 +572,48 @@
             var isDraggingVol = false;
             var lastVolume = 50;
             var isMuted = false;
+            var activeDeviceAlias = "livingroom";
+            var devicesCache = [];
+            var devicesLastFetched = 0;
+            var groupMembers = loadGroupMembers();
 
             function el(id) { return document.getElementById(id); }
+
+            function normalizeName(name) {
+                if (!name) return "unknown";
+                return name.toLowerCase().replace(/[^a-z0-9]/g, "");
+            }
+
+            function loadGroupMembers() {
+                try {
+                    var stored = localStorage.getItem("sonosGroupMembers");
+                    if (!stored) return {};
+                    var arr = JSON.parse(stored);
+                    var map = {};
+                    for (var i = 0; i < arr.length; i++) {
+                        map[arr[i]] = true;
+                    }
+                    return map;
+                } catch (e) {
+                    return {};
+                }
+            }
+
+            function persistGroupMembers() {
+                try {
+                    localStorage.setItem("sonosGroupMembers", JSON.stringify(Object.keys(groupMembers)));
+                } catch (e) {}
+            }
+
+            function setGroupMember(alias, enabled) {
+                if (enabled) {
+                    groupMembers[alias] = true;
+                } else {
+                    delete groupMembers[alias];
+                }
+                persistGroupMembers();
+                renderDeviceGrid();
+            }
 
             function xhrSpotify(method, url, body, cb) {
                 var r = new XMLHttpRequest();
@@ -596,19 +627,24 @@
                 r.send(body ? JSON.stringify(body) : null);
             }
 
-            function sendAction(action, volume) {
+            function sendAction(action, opts) {
+                opts = opts || {};
                 var payload = {
-                    player: el("speaker-select").value,
+                    player: activeDeviceAlias,
                     action: action
                 };
-                if (action === "volume_set") payload.volume = volume;
+                if (typeof opts.volume !== "undefined") payload.volume = opts.volume;
+                if (opts.member) payload.member = opts.member;
 
                 var r = new XMLHttpRequest();
                 r.open("POST", WEBHOOK_URL, true);
                 r.setRequestHeader("Content-Type", "application/json");
+                r.onreadystatechange = function () {
+                    if (r.readyState === 4) {
+                        el("artist").innerHTML = "Sent: " + action;
+                    }
+                };
                 r.send(JSON.stringify(payload));
-
-                el("artist").innerHTML = "Sent: " + action;
             }
 
             function updatePlayIcon() {
@@ -666,16 +702,8 @@
                         el("no-cover").style.display = "none";
                     }
 
-                    isPlaying = p.is_playing;
-                    updatePlayIcon();
-
-                    duration = item.duration_ms;
-                    position = p.progress_ms;
-                    lastUpdate = Date.now();
-                    el("time-total").innerText = fmt(duration);
-                    el("time-current").innerText = fmt(position);
-
                     if (p.device) {
+                        activeDeviceAlias = normalizeName(p.device.name);
                         if (!isDraggingVol) {
                             el("vol-slider").value = p.device.volume_percent;
                         }
@@ -684,7 +712,60 @@
                         }
                         updateMuteIcon(p.device.volume_percent);
                     }
+
+                    isPlaying = p.is_playing;
+                    updatePlayIcon();
+
+                    duration = item.duration_ms;
+                    position = p.progress_ms;
+                    lastUpdate = Date.now();
+                    el("time-total").innerText = fmt(duration);
+                    el("time-current").innerText = fmt(position);
+                    maybeRefreshDevices();
                 });
+            }
+
+            function fetchDevices() {
+                xhrSpotify("GET", "/api/devices", null, function (status, text) {
+                    if (status !== 200) return;
+                    try {
+                        var data = JSON.parse(text);
+                        devicesCache = data.devices || [];
+                        devicesLastFetched = Date.now();
+                        renderDeviceGrid();
+                    } catch (e) {}
+                });
+            }
+
+            function maybeRefreshDevices() {
+                if (Date.now() - devicesLastFetched > 15000) {
+                    fetchDevices();
+                }
+            }
+
+            function renderDeviceGrid() {
+                var grid = el("device-grid");
+                if (!grid) return;
+                grid.innerHTML = "";
+                for (var i = 0; i < devicesCache.length; i++) {
+                    (function (device) {
+                        var alias = normalizeName(device.name);
+                        var btn = document.createElement("button");
+                        btn.type = "button";
+                        btn.className = "device-btn" + (groupMembers[alias] ? " selected" : "");
+                        btn.innerHTML = device.name;
+                        btn.onclick = function () {
+                            toggleGroupMember(alias);
+                        };
+                        grid.appendChild(btn);
+                    })(devicesCache[i]);
+                }
+            }
+
+            function toggleGroupMember(alias) {
+                var action = groupMembers[alias] ? "group_remove" : "group_add";
+                sendAction(action, { member: alias });
+                setGroupMember(alias, action === "group_add");
             }
 
             // Smooth Progress Bar
@@ -715,7 +796,7 @@
                 var v = parseInt(val, 10);
                 if (isNaN(v)) return;
                 lastVolume = v;
-                sendAction("volume_set", v);
+                sendAction("volume_set", { volume: v });
                 setTimeout(function () { isDraggingVol = false; }, 300);
             };
 
@@ -753,7 +834,7 @@
                         for (var i = 0; i < data.playlists.length; i++) {
                             var p = data.playlists[i];
                             var img = p.image ? ('<img src="' + p.image + '" class="playlist-img">') : '<div class="playlist-img"></div>';
-                            html += '<div class="playlist-item" onclick="playPlaylist(&quot;' + p.uri + '&quot;)">' +
+                            html += '<div class="playlist-item" onclick="playPlaylist(\'' + p.uri + '\')">' +
                                 img +
                                 '<div>' +
                                 '<div class="playlist-name">' + p.name + '</div>' +
@@ -775,14 +856,9 @@
             };
 
             function init() {
+                fetchDevices();
                 el("track").innerHTML = "Not Playing";
                 el("artist").innerHTML = "Ready";
-                el("speaker-select").value = (function () {
-                    try { return localStorage.getItem("sonosSpeaker") || "kitchen"; } catch (e) { return "kitchen"; }
-                })();
-                el("speaker-select").onchange = function () {
-                    try { localStorage.setItem("sonosSpeaker", el("speaker-select").value); } catch (e) {}
-                };
                 poll();
                 setInterval(poll, 3000);
             }
