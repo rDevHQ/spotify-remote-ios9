@@ -544,6 +544,8 @@
         <div id="device-grid" class="device-grid"></div>
     </div>
 
+    <script src="sonos-devices.js"></script>
+
     <!-- Login Overlay -->
     <div id="login-modal" class="login-overlay">
         <img src="spotify-logo.png" style="width:80px; height:80px; margin-bottom:20px;">
@@ -572,17 +574,11 @@
             var isDraggingVol = false;
             var lastVolume = 50;
             var isMuted = false;
-            var activeDeviceAlias = "livingroom";
-            var devicesCache = [];
-            var devicesLastFetched = 0;
+            var devicesConfig = window.SONOS_DEVICES || [];
+            var activeDeviceAlias = devicesConfig.length ? devicesConfig[0].id : "livingroom";
             var groupMembers = loadGroupMembers();
 
             function el(id) { return document.getElementById(id); }
-
-            function normalizeName(name) {
-                if (!name) return "unknown";
-                return name.toLowerCase().replace(/[^a-z0-9]/g, "");
-            }
 
             function loadGroupMembers() {
                 try {
@@ -612,7 +608,6 @@
                     delete groupMembers[alias];
                 }
                 persistGroupMembers();
-                renderDeviceGrid();
             }
 
             function xhrSpotify(method, url, body, cb) {
@@ -703,7 +698,6 @@
                     }
 
                     if (p.device) {
-                        activeDeviceAlias = normalizeName(p.device.name);
                         if (!isDraggingVol) {
                             el("vol-slider").value = p.device.volume_percent;
                         }
@@ -725,31 +719,13 @@
                 });
             }
 
-            function fetchDevices() {
-                xhrSpotify("GET", "/api/devices", null, function (status, text) {
-                    if (status !== 200) return;
-                    try {
-                        var data = JSON.parse(text);
-                        devicesCache = data.devices || [];
-                        devicesLastFetched = Date.now();
-                        renderDeviceGrid();
-                    } catch (e) {}
-                });
-            }
-
-            function maybeRefreshDevices() {
-                if (Date.now() - devicesLastFetched > 15000) {
-                    fetchDevices();
-                }
-            }
-
             function renderDeviceGrid() {
                 var grid = el("device-grid");
                 if (!grid) return;
                 grid.innerHTML = "";
                 for (var i = 0; i < devicesCache.length; i++) {
                     (function (device) {
-                        var alias = normalizeName(device.name);
+                        var alias = device.id;
                         var btn = document.createElement("button");
                         btn.type = "button";
                         btn.className = "device-btn" + (groupMembers[alias] ? " selected" : "");
