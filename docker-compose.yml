@@ -14,4 +14,4 @@ services:
     volumes:
       - /DATA/AppData/spotify-remote/data:/data
     x-casaos:
-      icon: https://raw.githubusercontent.com/rDevHQ/spotify-remote-ios9/main/public/favicon.png
+      icon: https://external-content.duckduckgo.com/iu/?u=http%3A%2F%2Ftous-logos.com%2Fwp-content%2Fuploads%2F2018%2F05%2FLogo-Spotify.png&f=1&nofb=1&ipt=df4185186c88fcdb486447124b14c01410bd1a9cb2be108db90ee461ece6ca7d
