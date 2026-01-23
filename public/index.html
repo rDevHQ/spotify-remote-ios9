@@ -723,7 +723,7 @@
                 var grid = el("device-grid");
                 if (!grid) return;
                 grid.innerHTML = "";
-                for (var i = 0; i < devicesCache.length; i++) {
+                for (var i = 0; i < devicesConfig.length; i++) {
                     (function (device) {
                         var alias = device.id;
                         var btn = document.createElement("button");
@@ -734,7 +734,7 @@
                             toggleGroupMember(alias);
                         };
                         grid.appendChild(btn);
-                    })(devicesCache[i]);
+                    })(devicesConfig[i]);
                 }
             }
 
