@@ -343,6 +343,13 @@
             color: #000;
         }
 
+        .device-btn.master {
+            background: #1db954;
+            border-color: #fff;
+            color: #000;
+            box-shadow: 0 0 0 2px #fff;
+        }
+
         .device-info:active {
             background: rgba(255, 255, 255, 0.1);
         }
@@ -575,8 +582,17 @@
             var lastVolume = 50;
             var isMuted = false;
             var devicesConfig = window.SONOS_DEVICES || [];
-            var activeDeviceAlias = devicesConfig.length ? devicesConfig[0].id : "livingroom";
             var groupMembers = loadGroupMembers();
+
+            function getActiveDevice() {
+                // First selected speaker (in config order) is the master
+                for (var i = 0; i < devicesConfig.length; i++) {
+                    if (groupMembers[devicesConfig[i].id]) {
+                        return devicesConfig[i].id;
+                    }
+                }
+                return devicesConfig.length ? devicesConfig[0].id : "livingroom";
+            }
 
             function el(id) { return document.getElementById(id); }
 
@@ -637,8 +653,9 @@
 
             function sendAction(action, opts) {
                 opts = opts || {};
+                var master = getActiveDevice();
                 var payload = {
-                    player: activeDeviceAlias,
+                    player: master,
                     action: action
                 };
                 if (typeof opts.volume !== "undefined") payload.volume = opts.volume;
@@ -649,7 +666,7 @@
                 r.setRequestHeader("Content-Type", "application/json");
                 r.onreadystatechange = function () {
                     if (r.readyState === 4) {
-                        el("artist").innerHTML = "Sent: " + action;
+                        el("artist").innerHTML = "Sent: " + action + " → " + master;
                     }
                 };
                 r.send(JSON.stringify(payload));
@@ -735,12 +752,19 @@
                 var grid = el("device-grid");
                 if (!grid) return;
                 grid.innerHTML = "";
+                var master = getActiveDevice();
                 for (var i = 0; i < devicesConfig.length; i++) {
                     (function (device) {
                         var alias = device.id;
                         var btn = document.createElement("button");
                         btn.type = "button";
-                        btn.className = "device-btn" + (groupMembers[alias] ? " selected" : "");
+                        var cls = "device-btn";
+                        if (alias === master && groupMembers[alias]) {
+                            cls += " master";
+                        } else if (groupMembers[alias]) {
+                            cls += " selected";
+                        }
+                        btn.className = cls;
                         btn.innerHTML = device.name;
                         btn.onclick = function () {
                             toggleGroupMember(alias);
