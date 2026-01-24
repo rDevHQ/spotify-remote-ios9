@@ -691,11 +691,14 @@
                 if (typeof opts.volume !== "undefined") payload.volume = opts.volume;
                 if (opts.member) payload.member = opts.member;
 
+                console.log("[SEND] Action:", action, "| Master:", master, "| detectedMaster:", detectedMaster, "| Payload:", JSON.stringify(payload));
+
                 var r = new XMLHttpRequest();
                 r.open("POST", WEBHOOK_URL, true);
                 r.setRequestHeader("Content-Type", "application/json");
                 r.onreadystatechange = function () {
                     if (r.readyState === 4) {
+                        console.log("[SEND] Response:", r.status, r.responseText);
                         el("artist").innerHTML = "Sent: " + action + " → " + master;
                     }
                 };
@@ -758,6 +761,8 @@
                     }
 
                     if (p.device) {
+                        console.log("[SPOTIFY] Device:", p.device.name, "| is_playing:", p.is_playing, "| volume:", p.device.volume_percent);
+                        
                         if (!isDraggingVol) {
                             el("vol-slider").value = p.device.volume_percent;
                         }
@@ -768,7 +773,9 @@
 
                         // Detect master from Spotify's active device
                         var matched = findDeviceBySpotifyName(p.device.name);
+                        console.log("[SPOTIFY] Matched:", matched, "| Current detectedMaster:", detectedMaster);
                         if (matched && matched !== detectedMaster) {
+                            console.log("[SPOTIFY] Updating detectedMaster to:", matched);
                             detectedMaster = matched;
                             renderDeviceGrid();
                         }
@@ -814,6 +821,7 @@
 
             function toggleGroupMember(alias) {
                 var willAdd = !groupMembers[alias];
+                console.log("[BUTTON] Toggle speaker:", alias, "| willAdd:", willAdd);
                 setGroupMember(alias, willAdd);
                 renderDeviceGrid();
                 var action = willAdd ? "group_add" : "group_remove";
@@ -832,13 +840,14 @@
             }, 100);
 
             window.togglePlay = function () {
+                console.log("[BUTTON] Play/Pause pressed");
                 sendAction("play_pause");
                 setTimeout(poll, 500);
             };
-            window.nextTrack = function () { sendAction("next"); setTimeout(poll, 500); };
-            window.prevTrack = function () { sendAction("prev"); setTimeout(poll, 500); };
-            window.volumeDown = function () { sendAction("volume_down"); };
-            window.volumeUp = function () { sendAction("volume_up"); };
+            window.nextTrack = function () { console.log("[BUTTON] Next pressed"); sendAction("next"); setTimeout(poll, 500); };
+            window.prevTrack = function () { console.log("[BUTTON] Prev pressed"); sendAction("prev"); setTimeout(poll, 500); };
+            window.volumeDown = function () { console.log("[BUTTON] Vol- pressed"); sendAction("volume_down"); };
+            window.volumeUp = function () { console.log("[BUTTON] Vol+ pressed"); sendAction("volume_up"); };
 
             window.onVolInput = function () {
                 isDraggingVol = true;
