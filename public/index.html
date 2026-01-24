@@ -583,9 +583,30 @@
             var isMuted = false;
             var devicesConfig = window.SONOS_DEVICES || [];
             var groupMembers = loadGroupMembers();
+            var detectedMaster = null; // Set from Spotify API
+
+            function findDeviceBySpotifyName(spotifyName) {
+                if (!spotifyName) return null;
+                var lower = spotifyName.toLowerCase();
+                for (var i = 0; i < devicesConfig.length; i++) {
+                    var cfg = devicesConfig[i];
+                    if (cfg.spotify_name && cfg.spotify_name.toLowerCase() === lower) {
+                        return cfg.id;
+                    }
+                    // Fallback: partial match on name
+                    if (lower.indexOf(cfg.name.toLowerCase()) !== -1) {
+                        return cfg.id;
+                    }
+                }
+                return null;
+            }
 
             function getActiveDevice() {
-                // First selected speaker (in config order) is the master
+                // Prefer Spotify-detected master (the actual coordinator)
+                if (detectedMaster) {
+                    return detectedMaster;
+                }
+                // Fallback: first selected speaker in config order
                 for (var i = 0; i < devicesConfig.length; i++) {
                     if (groupMembers[devicesConfig[i].id]) {
                         return devicesConfig[i].id;
@@ -735,6 +756,13 @@
                             lastVolume = p.device.volume_percent;
                         }
                         updateMuteIcon(p.device.volume_percent);
+
+                        // Detect master from Spotify's active device
+                        var matched = findDeviceBySpotifyName(p.device.name);
+                        if (matched && matched !== detectedMaster) {
+                            detectedMaster = matched;
+                            renderDeviceGrid();
+                        }
                     }
 
                     isPlaying = p.is_playing;
@@ -759,7 +787,8 @@
                         var btn = document.createElement("button");
                         btn.type = "button";
                         var cls = "device-btn";
-                        if (alias === master && groupMembers[alias]) {
+                        if (alias === master) {
+                            // Detected or selected master
                             cls += " master";
                         } else if (groupMembers[alias]) {
                             cls += " selected";
@@ -873,7 +902,7 @@
                 renderDeviceGrid();
                 el("track").innerHTML = "Not Playing";
                 el("artist").innerHTML = "Ready";
-                poll();
+                        poll();
                 setInterval(poll, 3000);
             }
 
