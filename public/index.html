@@ -587,13 +587,22 @@
 
             function findDeviceBySpotifyName(spotifyName) {
                 if (!spotifyName) return null;
-                var lower = spotifyName.toLowerCase();
+                var trimmed = spotifyName.replace(/^\s+|\s+$/g, "");
+                for (var i = 0; i < devicesConfig.length; i++) {
+                    var cfg = devicesConfig[i];
+                    // Exact match
+                    if (cfg.spotify_name && cfg.spotify_name === trimmed) {
+                        return cfg.id;
+                    }
+                }
+                // Second pass: case-insensitive and partial match
+                var lower = trimmed.toLowerCase();
                 for (var i = 0; i < devicesConfig.length; i++) {
                     var cfg = devicesConfig[i];
                     if (cfg.spotify_name && cfg.spotify_name.toLowerCase() === lower) {
                         return cfg.id;
                     }
-                    // Fallback: partial match on name
+                    // Partial match on display name
                     if (lower.indexOf(cfg.name.toLowerCase()) !== -1) {
                         return cfg.id;
                     }
@@ -761,8 +770,12 @@
                         var spotifyDeviceName = p.device.name || "(no name)";
                         var matched = findDeviceBySpotifyName(spotifyDeviceName);
                         
-                        // Debug: show detected device
-                        el("artist").innerHTML += " <small style='color:#888'>📍" + spotifyDeviceName + (matched ? " → " + matched : " (no match)") + "</small>";
+                        // Debug: show detected device and config
+                        var configNames = [];
+                        for (var j = 0; j < devicesConfig.length; j++) {
+                            configNames.push(devicesConfig[j].spotify_name || "?");
+                        }
+                        el("artist").innerHTML += " <small style='color:#888'>📍" + spotifyDeviceName + (matched ? " → " + matched : " (no match, cfg:" + configNames.join(",") + ")") + "</small>";
                         
                         if (matched && matched !== detectedMaster) {
                             detectedMaster = matched;
