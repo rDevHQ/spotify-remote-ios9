@@ -751,9 +751,10 @@
             }
 
             function toggleGroupMember(alias) {
-                var action = groupMembers[alias] ? "group_remove" : "group_add";
+                var willAdd = !groupMembers[alias];
+                setGroupMember(alias, willAdd);
+                var action = willAdd ? "group_add" : "group_remove";
                 sendAction(action, { member: alias });
-                setGroupMember(alias, action === "group_add");
             }
 
             // Smooth Progress Bar
