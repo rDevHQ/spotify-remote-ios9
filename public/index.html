@@ -587,7 +587,8 @@
 
             function findDeviceBySpotifyName(spotifyName) {
                 if (!spotifyName) return null;
-                var trimmed = spotifyName.replace(/^\s+|\s+$/g, "");
+                // Strip " + N" suffix that Spotify adds for grouped speakers
+                var trimmed = spotifyName.replace(/ \+ \d+$/, "").replace(/^\s+|\s+$/g, "");
                 for (var i = 0; i < devicesConfig.length; i++) {
                     var cfg = devicesConfig[i];
                     // Exact match
