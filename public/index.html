@@ -580,6 +580,16 @@
 
             function el(id) { return document.getElementById(id); }
 
+            function resolveDeviceId(value) {
+                if (!value) return null;
+                var normalized = value.toLowerCase();
+                for (var i = 0; i < devicesConfig.length; i++) {
+                    if (devicesConfig[i].id === normalized) return devicesConfig[i].id;
+                    if (devicesConfig[i].name && devicesConfig[i].name.toLowerCase() === normalized) return devicesConfig[i].id;
+                }
+                return null;
+            }
+
             function loadGroupMembers() {
                 try {
                     var stored = localStorage.getItem("sonosGroupMembers");
@@ -587,7 +597,10 @@
                     var arr = JSON.parse(stored);
                     var map = {};
                     for (var i = 0; i < arr.length; i++) {
-                        map[arr[i]] = true;
+                        var resolved = resolveDeviceId(arr[i]);
+                        if (resolved) {
+                            map[resolved] = true;
+                        }
                     }
                     return map;
                 } catch (e) {
