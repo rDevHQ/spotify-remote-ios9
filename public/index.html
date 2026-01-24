@@ -758,7 +758,12 @@
                         updateMuteIcon(p.device.volume_percent);
 
                         // Detect master from Spotify's active device
-                        var matched = findDeviceBySpotifyName(p.device.name);
+                        var spotifyDeviceName = p.device.name || "(no name)";
+                        var matched = findDeviceBySpotifyName(spotifyDeviceName);
+                        
+                        // Debug: show detected device
+                        el("artist").innerHTML += " <small style='color:#888'>📍" + spotifyDeviceName + (matched ? " → " + matched : " (no match)") + "</small>";
+                        
                         if (matched && matched !== detectedMaster) {
                             detectedMaster = matched;
                             renderDeviceGrid();
