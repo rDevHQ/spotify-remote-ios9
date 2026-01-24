@@ -753,6 +753,7 @@
             function toggleGroupMember(alias) {
                 var willAdd = !groupMembers[alias];
                 setGroupMember(alias, willAdd);
+                renderDeviceGrid();
                 var action = willAdd ? "group_add" : "group_remove";
                 sendAction(action, { member: alias });
             }
